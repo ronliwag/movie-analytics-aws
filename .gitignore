@@ -1,0 +1,21 @@
+# Data
+data/raw/
+data/processed/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# PySpark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# OS
+.DS_Store
+
+# Power BI
+*.pbix.bak
