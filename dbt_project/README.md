@@ -37,10 +37,10 @@ dbt docs generate && dbt docs serve
 - Add generic tests (`unique`, `not_null`) and column/model descriptions
   to every model's `schema.yml`
 
-## Grading focus (dbt — 25% of the rubric)
+## Grading focus (dbt / Airflow — 25% of the rubric)
 - SQL and modelling logic — CTEs, modular and DRY (10%)
 - Project structure — staging/intermediate/marts clearly separated (5%)
 - Testing and documentation — generic tests + descriptions on all models (5%)
-- Correct use of `source()` and `ref()` (5%)
+- Correct use of `source()`/`ref()`, shared with Airflow orchestration (5%)
 
 See [../docs/EVALUATION.md](../docs/EVALUATION.md) for the full rubric.

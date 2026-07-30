@@ -25,9 +25,9 @@
 python -m scripts.pandas.clean_data
 ```
 
-## Grading focus (Python/Pandas — 25% of the rubric)
+## Grading focus (Python / Pandas / PySpark — 25% of the rubric)
 - Python classes (5%)
-- Data processing functions (10%)
+- Data processing functions (5%)
 - Pandas operations (10%)
 
 See [docs/EVALUATION.md](../../docs/EVALUATION.md) for the full rubric.

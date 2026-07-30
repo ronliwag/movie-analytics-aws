@@ -27,10 +27,8 @@ compose file mounts (or symlink this repo's `airflow/dags/` into it).
 - Use task dependencies (`>>`) to enforce the order — a broken PySpark run
   should not let dbt build on stale data
 
-## Grading focus
+## Grading focus (dbt / Airflow — 25% of the rubric)
+- `source()`/`ref()` and Airflow orchestration — DAG runs the pipeline
+  end to end, scheduled, with retries on every task (5%)
 
-Airflow is a required technical deliverable per the capstone brief (DAG
-orchestrates the full pipeline, scheduled, all tasks have retries). It is
-not a separately-weighted line in the scored rubric, but a working DAG
-is what demonstrates the pipeline is actually end-to-end. See
-[../docs/EVALUATION.md](../docs/EVALUATION.md) for the scored rubric.
+See [../docs/EVALUATION.md](../docs/EVALUATION.md) for the full rubric.

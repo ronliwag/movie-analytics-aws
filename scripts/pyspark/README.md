@@ -24,9 +24,9 @@ python scripts/pyspark/transform.py
 python -m scripts.pyspark.analysis
 ```
 
-## Grading focus
+## Grading focus (Python / Pandas / PySpark — 25% of the rubric)
+- PySpark batch processing — schema enforcement, writes to Postgres/Parquet (5%)
 
-PySpark is a required technical deliverable per the capstone brief. It isn't
-a separately-weighted rubric line, but its output is what dbt and Power BI
-build on — a broken PySpark job blocks the rest of the pipeline. See
-[docs/EVALUATION.md](../../docs/EVALUATION.md) for the scored rubric.
+Its output is also what dbt and Power BI build on — a broken PySpark job
+blocks the rest of the pipeline regardless of its own score. See
+[docs/EVALUATION.md](../../docs/EVALUATION.md) for the full rubric.
