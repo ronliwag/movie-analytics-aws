@@ -129,6 +129,7 @@ dashboard answers "so what should we do," not only "here's a chart."
     slate dangerously concentrated in one genre or budget tier?
 
 **Risk & legacy**
+
 16. *Underwriting* insures film productions against box-office failure —
     which budget/genre/studio profiles should raise the premium?
 
