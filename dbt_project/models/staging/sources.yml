@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: movie_analytics_raw
+    description: >
+      Tables written by the PySpark job in scripts/pyspark/transform.py.
+    # TODO: point `database`/`schema` at wherever your PySpark job wrote to.
+    schema: raw
+    tables:
+      - name: movies_main
+      - name: ratings
+      - name: movie_extended

@@ -3,7 +3,7 @@
 Builds on the cleaned DataFrame(s) produced in transform.py.
 """
 
-from week3_pyspark.transform import get_spark
+from scripts.pyspark.transform import get_spark
 
 
 def build_views(spark, movies_df):

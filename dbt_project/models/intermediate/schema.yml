@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: int_movies_joined
+    description: Movies joined to their ratings and extended metadata.
+    columns:
+      - name: movie_id
+        tests:
+          - unique
+          - not_null

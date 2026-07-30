@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: fct_movie_performance
+    description: Analytics-ready fact table consumed directly by the Power BI dashboard.
+    columns:
+      - name: movie_id
+        tests:
+          - unique
+          - not_null

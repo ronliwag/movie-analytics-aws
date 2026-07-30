@@ -1,6 +1,4 @@
-# Week 1 — SQL Implementation
-
-Based on the SQL training (basic to advanced).
+# SQL Implementation
 
 ## Tasks
 
@@ -19,8 +17,10 @@ Fill in the stub files under `queries/`:
 - `03_aggregations_joins.sql` — complex aggregations and joins across the
   schema.
 
-## Grading focus
+## Grading focus (SQL — 25% of the rubric)
 - Database schema design (5%)
 - Table relationships (5%)
-- Advanced SQL queries — LAG/LEAD (10%)
+- Advanced SQL — LAG/LEAD, window functions (10%)
 - Query optimization (5%)
+
+See [docs/EVALUATION.md](../../docs/EVALUATION.md) for the full rubric.

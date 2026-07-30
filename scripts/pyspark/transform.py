@@ -3,7 +3,7 @@
 from pathlib import Path
 from pyspark.sql import SparkSession
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
 def get_spark() -> SparkSession:

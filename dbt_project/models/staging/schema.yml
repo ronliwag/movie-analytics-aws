@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_movies
+    description: One row per movie, lightly cleaned from the raw source.
+    columns:
+      - name: movie_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_ratings
+    description: One row per (movie_id, rating source).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: stg_movie_extended
+    description: Extended movie metadata — genres, production companies, countries.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null

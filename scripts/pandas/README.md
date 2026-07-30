@@ -1,6 +1,4 @@
-# Week 2 — Python & Pandas Processing
-
-Following the training outline.
+# Python & Pandas Processing
 
 ## Tasks
 
@@ -24,11 +22,12 @@ Following the training outline.
 ## Run
 
 ```
-python -m week2_python_pandas.clean_data
+python -m scripts.pandas.clean_data
 ```
 
-## Grading focus
-- Python classes implementation (5%)
-- Data processing functions (5%)
+## Grading focus (Python/Pandas — 25% of the rubric)
+- Python classes (5%)
+- Data processing functions (10%)
 - Pandas operations (10%)
-- Error handling (5%)
+
+See [docs/EVALUATION.md](../../docs/EVALUATION.md) for the full rubric.

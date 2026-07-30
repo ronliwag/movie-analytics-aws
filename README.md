@@ -1,12 +1,10 @@
 # Movie Analytics Capstone
 
-4-week capstone project for Data Engineering interns. You'll build a movie
-analytics pipeline that progresses through SQL, Python/Pandas, PySpark, and
-Power BI, working with a messy, realistic movie dataset.
-
-## Duration
-
-4 weeks
+Capstone project for Data Engineering interns (Weeks 8–12 of the
+internship program). You'll build an end-to-end movie analytics
+pipeline — SQL, Python/Pandas, PySpark, dbt, Airflow, and Power BI —
+working with a messy, realistic movie dataset. You own this repository
+end-to-end.
 
 ## Dataset
 
@@ -31,34 +29,40 @@ handle as part of the project:
 ## Structure
 
 ```
-week1_sql/            SQL schema design + advanced queries
-week2_python_pandas/  OOP data model + Pandas cleaning/processing
-week3_pyspark/         PySpark transforms and analysis
-week4_powerbi/         Power BI dashboard deliverable
-docs/                  Evaluation rubric
+data/            Raw and processed datasets (gitignored)
+notebooks/       Exploratory analysis notebooks
+scripts/
+  sql/           SQL schema design + advanced queries
+  pandas/        OOP data model + Pandas cleaning/processing
+  pyspark/       PySpark transforms, writes to Postgres/Parquet
+dbt_project/     Staging -> intermediate -> marts dbt project
+airflow/dags/    DAG orchestrating PySpark -> dbt run -> dbt test
+powerbi/         Power BI dashboard deliverable (.pbix)
+docs/            Evaluation rubric
 ```
 
-Each week's folder has its own README with the specific tasks and stub files
-to fill in.
+Each folder has its own README with the specific tasks and stub files to
+fill in.
 
-## Weekly Breakdown
+## Pipeline
 
-### Week 1 — SQL Implementation
-Design the schema, load the dataset, and write advanced queries using
-LAG/LEAD and ROW_NUMBER, plus complex aggregations and joins.
+Data flows in this order: `scripts/pyspark/` cleans and lands the raw
+files into Postgres/Parquet -> `dbt_project/` builds staging, intermediate,
+and marts models on top -> `powerbi/` reads the marts layer -> `airflow/`
+orchestrates the whole thing on a schedule. `scripts/sql/` is a standalone
+schema-design and query exercise against the same dataset, not a step in
+this pipeline.
 
-### Week 2 — Python & Pandas Processing
-Build `Movie`/`Rating` classes, process the raw files with dictionaries,
-loops, lambdas, and datetime/casting utilities, then clean and analyze the
-data with Pandas.
+## Technical Requirements
 
-### Week 3 — PySpark Data Processing
-Reproduce and extend the analysis at scale with PySpark DataFrames, Spark
-SQL functions, and analytical views/summaries.
-
-### Week 4 — Power BI Dashboard
-Build an interactive movie performance dashboard on top of the cleaned
-dataset, with a proper data model, time intelligence, and filters.
+| Area | What to include |
+|---|---|
+| SQL | Normalized schema with keys/relationships. Advanced queries using LAG/LEAD and window functions. |
+| Python + Pandas | Classes for data extraction and transformation. Modular, reusable functions. Proper error handling. |
+| PySpark | Batch data processing. Schema enforcement. Write to PostgreSQL or Parquet. |
+| dbt | Full three-layer project (staging, intermediate, marts). Tests and documentation. `source()` and `ref()` used correctly. |
+| Airflow | DAG that orchestrates the full pipeline end to end. Scheduled. All tasks have retries. |
+| Power BI | Star schema data model. 5+ DAX measures. Dashboard with clear data story and recommended actions. |
 
 ## Evaluation
 
@@ -72,3 +76,6 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Airflow is not installed via `requirements.txt` — see
+[airflow/README.md](airflow/README.md) for the Docker Compose setup.

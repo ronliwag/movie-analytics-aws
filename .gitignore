@@ -14,6 +14,16 @@ spark-warehouse/
 metastore_db/
 derby.log
 
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+
+# Airflow (local Docker Compose runtime)
+airflow/logs/
+airflow/plugins/
+airflow/.env
+
 # OS
 .DS_Store
 
