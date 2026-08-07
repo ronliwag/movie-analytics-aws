@@ -3,7 +3,9 @@ data/raw/
 data/processed/
 
 # Python
+.env
 venv/
+.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
