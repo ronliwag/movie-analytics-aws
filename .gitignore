@@ -15,6 +15,7 @@ __pycache__/
 spark-warehouse/
 metastore_db/
 derby.log
+scripts/pyspark/jars/
 
 # dbt
 dbt_project/target/
