@@ -9,6 +9,10 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
+from scripts.pyspark.cleaning.extended import clean_extended
+from scripts.pyspark.cleaning.movies import clean_movies
+from scripts.pyspark.cleaning.ratings import clean_ratings
+
 load_dotenv()
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -73,12 +77,27 @@ def load_ratings(spark: SparkSession) -> DataFrame:
     )
 
 
-def clean(movies_df):
-    # TODO: dedupe, standardize dates, handle missing budgets using Spark
-    # SQL functions (pyspark.sql.functions). Held for now -- step 5
-    # (external validation / fill-in) informs how missing values get
-    # handled here.
-    raise NotImplementedError
+def clean(movies_df: DataFrame, extended_df: DataFrame, ratings_df: DataFrame) -> dict[str, DataFrame]:
+    """Orchestrates per-source cleaning.
+
+    Each source's rules live in its own module under scripts/pyspark/cleaning/
+    since they're independent of each other -- this just runs them and
+    enforces the one cross-table rule: drop movie_extended rows with no
+    matching movie. In practice this only removes movie_extended's copy of
+    the 3 corrupt/null-id rows (movies_main.id and movie_extended.id have
+    identical coverage otherwise -- 45,433 ids in both, 0 real orphans).
+    """
+    movies_clean = clean_movies(movies_df)
+    extended_clean = clean_extended(extended_df).join(
+        movies_clean.select("id"), on="id", how="inner"
+    )
+    ratings_clean = clean_ratings(ratings_df)
+
+    return {
+        "movies_main": movies_clean,
+        "movie_extended": extended_clean,
+        "ratings": ratings_clean,
+    }
 
 
 def jdbc_url() -> str:
@@ -93,7 +112,7 @@ def jdbc_properties() -> dict:
     }
 
 
-def ensure_raw_schema() -> None:
+def ensure_schema(schema: str) -> None:
     conn = psycopg2.connect(
         host=os.environ["DB_HOST"],
         port=os.environ["DB_PORT"],
@@ -103,31 +122,38 @@ def ensure_raw_schema() -> None:
     )
     try:
         with conn, conn.cursor() as cur:
-            cur.execute("CREATE SCHEMA IF NOT EXISTS raw;")
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema};")
     finally:
         conn.close()
 
 
-def write_raw(df: DataFrame, table: str) -> None:
-    df.write.jdbc(url=jdbc_url(), table=f"raw.{table}", mode="overwrite", properties=jdbc_properties())
+def write_table(df: DataFrame, schema: str, table: str) -> None:
+    df.write.jdbc(
+        url=jdbc_url(), table=f"{schema}.{table}", mode="overwrite", properties=jdbc_properties()
+    )
 
 
 def main():
-    # Ingestion only for now: load the three raw sources as-is and land them
-    # in Postgres `raw.*` (what dbt_project/models/staging/sources.yml
-    # expects to find). clean()/join()/parquet output is still TODO.
-    ensure_raw_schema()
+    ensure_schema("raw")
+    ensure_schema("clean")
 
     spark = get_spark()
     try:
-        tables = {
+        raw_tables = {
             "movies_main": load_movies(spark),
             "movie_extended": load_extended(spark),
             "ratings": load_ratings(spark),
         }
-        for table, df in tables.items():
-            write_raw(df, table)
+        for table, df in raw_tables.items():
+            write_table(df, "raw", table)
             print(f"raw.{table}: {df.count()} rows")
+
+        cleaned_tables = clean(
+            raw_tables["movies_main"], raw_tables["movie_extended"], raw_tables["ratings"]
+        )
+        for table, df in cleaned_tables.items():
+            write_table(df, "clean", table)
+            print(f"clean.{table}: {df.count()} rows")
     finally:
         spark.stop()
 
