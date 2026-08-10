@@ -1,4 +1,11 @@
-"""PySpark ingestion + transformation of the movie dataset."""
+"""PySpark ingestion + transformation of the movie dataset.
+
+Reads from data/enriched/ (scripts/enrichment/), not data/raw/ -- see
+that package's README for what it fills/corrects and why. Enrichment
+doesn't dedupe, drop corrupt rows, or standardize formats, so this file's
+job is unchanged from when it read data/raw/ directly; only SOURCE_DIR
+moved. Requires enrichment to have been run at least once already.
+"""
 
 import os
 from pathlib import Path
@@ -20,11 +27,19 @@ from pyspark.sql.types import (
 load_dotenv()
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+SOURCE_DIR = DATA_DIR / "enriched"
 JARS_DIR = Path(__file__).resolve().parent / "jars"
 
+# `id` is DoubleType, not IntegerType, on purpose: scripts/enrichment/
+# fill_missing.py coerces `id` to a nullable float (pd.to_numeric with
+# errors="coerce", to hold NaN for the 3 corrupt rows) before writing CSV,
+# so data/enriched/*.csv actually stores it as "862.0", not "862". Spark's
+# CSV reader can't parse "862.0" as IntegerType (returns NULL, silently,
+# for every row) but reads it fine as DoubleType -- load_movies()/
+# load_extended() cast it to a real integer afterward via .withColumn().
 MOVIES_MAIN_SCHEMA = StructType(
     [
-        StructField("id", IntegerType(), True),
+        StructField("id", DoubleType(), True),
         StructField("title", StringType(), True),
         # Kept as text: the source mixes date formats (e.g. "10/30/1995" vs
         # "15-12-1995") -- casting to DATE here would silently misparse rows.
@@ -35,15 +50,24 @@ MOVIES_MAIN_SCHEMA = StructType(
     ]
 )
 
+# Column order matches data/enriched/movie_extended.csv exactly -- Spark
+# applies an explicit `schema` positionally, not by matching header names.
+# original_title/original_language/director/cast are 4 columns
+# scripts/enrichment/fill_missing.py adds that don't exist in data/raw/ at
+# all.
 MOVIE_EXTENDED_SCHEMA = StructType(
     [
-        StructField("id", IntegerType(), True),
+        StructField("id", DoubleType(), True),  # see MOVIES_MAIN_SCHEMA's comment on `id`
         StructField("genres", StringType(), True),
         StructField("production_companies", StringType(), True),
         # Python-repr lists of dicts (single-quoted, not valid JSON) -- kept
         # raw, to be parsed properly in a later cleaning step.
         StructField("production_countries", StringType(), True),
         StructField("spoken_languages", StringType(), True),
+        StructField("original_title", StringType(), True),
+        StructField("original_language", StringType(), True),
+        StructField("director", StringType(), True),
+        StructField("cast", StringType(), True),
     ]
 )
 
@@ -64,6 +88,10 @@ CLEAN_EXTENDED_SCHEMA = StructType(
         StructField("id", IntegerType(), True),
         StructField("genres", StringType(), True),
         StructField("production_companies", StringType(), True),
+        StructField("original_title", StringType(), True),
+        StructField("original_language", StringType(), True),
+        StructField("director", StringType(), True),
+        StructField("cast", StringType(), True),
         StructField("production_country_codes", StringType(), True),
         StructField("production_country_names", StringType(), True),
         StructField("spoken_language_codes", StringType(), True),
@@ -93,19 +121,19 @@ def get_spark() -> SparkSession:
 
 
 def load_movies(spark: SparkSession) -> DataFrame:
-    return spark.read.csv(
-        str(DATA_DIR / "raw" / "movies_main.csv"), header=True, schema=MOVIES_MAIN_SCHEMA
-    )
+    df = spark.read.csv(str(SOURCE_DIR / "movies_main.csv"), header=True, schema=MOVIES_MAIN_SCHEMA)
+    return df.withColumn("id", F.col("id").cast(IntegerType()))
 
 
 def load_extended(spark: SparkSession) -> DataFrame:
-    return spark.read.csv(
-        str(DATA_DIR / "raw" / "movie_extended.csv"), header=True, schema=MOVIE_EXTENDED_SCHEMA
+    df = spark.read.csv(
+        str(SOURCE_DIR / "movie_extended.csv"), header=True, schema=MOVIE_EXTENDED_SCHEMA
     )
+    return df.withColumn("id", F.col("id").cast(IntegerType()))
 
 
 def load_ratings(spark: SparkSession) -> DataFrame:
-    raw = spark.read.option("multiLine", True).json(str(DATA_DIR / "raw" / "ratings.json"))
+    raw = spark.read.option("multiLine", True).json(str(SOURCE_DIR / "ratings.json"))
     return raw.select(
         F.col("movie_id").cast(IntegerType()).alias("movie_id"),
         F.col("ratings_summary.avg_rating").alias("avg_rating"),
@@ -167,6 +195,9 @@ def write_table(df: DataFrame, schema: str, table: str) -> None:
 
 
 def main():
+    # Postgres schema is still named "raw" (meaning "pre-clean"), even
+    # though its actual source is now data/enriched/, not data/raw/ -- see
+    # SOURCE_DIR / the module docstring.
     ensure_schema("raw")
     ensure_schema("clean")
 
