@@ -8,11 +8,21 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+# release_date in movies_main.csv mixes three formats with no stray values
+# (verified against the real data -- see scripts/pyspark/cleaning/README.md):
+# ISO YYYY-MM-DD, MM/DD/YYYY, and DD-MM-YYYY. "%B %d, %Y" is kept as an extra
+# fallback for the docstring's "May 14, 2021" example / other sources.
+_KNOWN_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%B %d, %Y"]
+
 
 def load_json(path: Path) -> dict:
-    # TODO: proper file handling — open with a context manager, handle
-    # FileNotFoundError / json.JSONDecodeError.
-    raise NotImplementedError
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"No such file: {path}") from None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Malformed JSON in {path}: {e}") from e
 
 
 def standardize_date(raw_date: str) -> datetime | None:
@@ -20,17 +30,29 @@ def standardize_date(raw_date: str) -> datetime | None:
 
     e.g. "2021-05-14", "05/14/2021", "May 14, 2021".
     """
-    # TODO: try known formats in order, return None if all fail.
-    raise NotImplementedError
+    if raw_date is None:
+        return None
+    raw_date = str(raw_date).strip()
+    if not raw_date:
+        return None
+
+    for fmt in _KNOWN_DATE_FORMATS:
+        try:
+            return datetime.strptime(raw_date, fmt)
+        except ValueError:
+            continue
+    return None
 
 
 def index_by_movie_id(records: list[dict]) -> dict:
     """Build a {movie_id: record} lookup dict for batch joins."""
-    # TODO: use a for loop (or dict comprehension) to index records.
-    raise NotImplementedError
+    index = {}
+    for record in records:
+        movie_id = record.get("movie_id", record.get("id"))
+        index[movie_id] = record
+    return index
 
 
 def apply_transform(records: list[dict], transform) -> list[dict]:
     """Apply a lambda/callable transform to each record."""
-    # TODO: use map()/lambda or a list comprehension.
-    raise NotImplementedError
+    return [transform(record) for record in records]

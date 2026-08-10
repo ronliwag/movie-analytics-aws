@@ -9,10 +9,6 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
-from scripts.pyspark.cleaning.extended import clean_extended
-from scripts.pyspark.cleaning.movies import clean_movies
-from scripts.pyspark.cleaning.ratings import clean_ratings
-
 load_dotenv()
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -77,26 +73,21 @@ def load_ratings(spark: SparkSession) -> DataFrame:
     )
 
 
-def clean(movies_df: DataFrame, extended_df: DataFrame, ratings_df: DataFrame) -> dict[str, DataFrame]:
-    """Orchestrates per-source cleaning.
-
-    Each source's rules live in its own module under scripts/pyspark/cleaning/
-    since they're independent of each other -- this just runs them and
-    enforces the one cross-table rule: drop movie_extended rows with no
-    matching movie. In practice this only removes movie_extended's copy of
-    the 3 corrupt/null-id rows (movies_main.id and movie_extended.id have
-    identical coverage otherwise -- 45,433 ids in both, 0 real orphans).
-    """
-    movies_clean = clean_movies(movies_df)
-    extended_clean = clean_extended(extended_df).join(
-        movies_clean.select("id"), on="id", how="inner"
-    )
-    ratings_clean = clean_ratings(ratings_df)
-
+def clean(spark: SparkSession, processed_dir: Path | None = None) -> dict[str, DataFrame]:
+    """Loads the already-cleaned CSVs produced by scripts/pandas/clean_data.py
+    -- one per raw source, mirroring raw.movies_main/movie_extended/ratings."""
+    
+    base = processed_dir or (DATA_DIR / "processed")
     return {
-        "movies_main": movies_clean,
-        "movie_extended": extended_clean,
-        "ratings": ratings_clean,
+        "movies_main": spark.read.csv(
+            str(base / "movies_main_clean.csv"), header=True, inferSchema=True
+        ),
+        "movie_extended": spark.read.csv(
+            str(base / "movie_extended_clean.csv"), header=True, inferSchema=True
+        ),
+        "ratings": spark.read.csv(
+            str(base / "ratings_clean.csv"), header=True, inferSchema=True
+        ),
     }
 
 
@@ -148,9 +139,7 @@ def main():
             write_table(df, "raw", table)
             print(f"raw.{table}: {df.count()} rows")
 
-        cleaned_tables = clean(
-            raw_tables["movies_main"], raw_tables["movie_extended"], raw_tables["ratings"]
-        )
+        cleaned_tables = clean(spark)
         for table, df in cleaned_tables.items():
             write_table(df, "clean", table)
             print(f"clean.{table}: {df.count()} rows")
