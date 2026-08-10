@@ -43,8 +43,8 @@ def load_ratings(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
         }
     )
     df["last_rated"] = pd.to_datetime(df["last_rated"], unit="s", utc=True)
-    # NaN for single-rating movies (undefined statistic) -- same NaN->NULL
-    # decision as scripts/pyspark/cleaning/ratings.py.
+    # NaN for single-rating movies (undefined statistic) -- see CLEANING.md's
+    # "NaN std_dev" section for why this becomes NULL.
     df["std_dev"] = df["std_dev"].where(~df["std_dev"].isna(), other=np.nan)
     return df
 
@@ -126,7 +126,7 @@ _DASH_DATE = re.compile(r"^\d{1,2}-\d{1,2}-\d{4}$")
 def fix_dates(df: pd.DataFrame, column: str = "release_date") -> pd.DataFrame:
     # A single pd.to_datetime auto-parse would silently mis-parse a chunk of
     # rows (DD-MM vs MM-DD is ambiguous per-row) -- standardize_date handles
-    # the per-format detection, same rule as scripts/pyspark/cleaning/movies.py.
+    # the per-format detection. See CLEANING.md's "Date formats" section.
     df = df.copy()
     df[column] = df[column].apply(standardize_date)
     return df
@@ -136,8 +136,8 @@ def fix_missing_budget(df: pd.DataFrame) -> pd.DataFrame:
     # budget=0 (74.5% of rows) / revenue=0 (83.7%) are implausible as literal
     # zero at that rate -- this source's "not reported" convention. Convert
     # to NULL so "unknown" has one consistent representation; filling these
-    # gaps is deferred to external validation, not attempted here. Same
-    # decision as scripts/pyspark/cleaning/movies.py.
+    # gaps is deferred to external validation, not attempted here. See
+    # CLEANING.md's "Missing budget/revenue" section.
     df = df.copy()
     df["budget"] = df["budget"].replace(0, np.nan)
     df["revenue"] = df["revenue"].replace(0, np.nan)

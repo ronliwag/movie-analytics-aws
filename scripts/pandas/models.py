@@ -34,8 +34,8 @@ class Movie:
     @staticmethod
     def _parse_amount(value):
         # 0 is this dataset's "not reported" convention, not a real $0 --
-        # same decision as scripts/pyspark/cleaning/movies.py, kept
-        # consistent here.
+        # kept consistent with clean_data.py's fix_missing_budget() (see
+        # CLEANING.md's "Missing budget/revenue" section).
         if value is None:
             return None
         try:
@@ -88,7 +88,7 @@ class Rating:
     @property
     def std_dev(self):
         # NaN for single-rating movies (undefined statistic) -- same
-        # NaN -> None decision as scripts/pyspark/cleaning/ratings.py.
+        # NaN -> None decision as clean_data.py's load_ratings().
         value = self.metrics.get("std_dev")
         if isinstance(value, float) and math.isnan(value):
             return None

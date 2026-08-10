@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 # release_date in movies_main.csv mixes three formats with no stray values
-# (verified against the real data -- see scripts/pyspark/cleaning/README.md):
+# (verified against the real data -- see scripts/pandas/CLEANING.md):
 # ISO YYYY-MM-DD, MM/DD/YYYY, and DD-MM-YYYY. "%B %d, %Y" is kept as an extra
 # fallback for the docstring's "May 14, 2021" example / other sources.
 _KNOWN_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%B %d, %Y"]
