@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from scripts.pandas.data_processor import standardize_date
-from scripts.pandas.models import Movie
+from scripts.pandas.data_processor import apply_transform, index_by_movie_id, load_json, standardize_date
+from scripts.pandas.models import Movie, Rating
 
 RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
 PROCESSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
@@ -55,16 +55,29 @@ def _split_list(raw) -> list:
     return [part.strip() for part in str(raw).split(",") if part.strip()]
 
 
-def _parse_field(raw, field: str) -> list:
+def _parse_codes_and_names(raw, code_field: str) -> tuple[list, list]:
+    # Parses the Python-repr list once and pulls both fields from the same
+    # result -- an earlier version called ast.literal_eval twice per row
+    # (once per field), which is pure waste since it's the same string both
+    # times.
     if pd.isna(raw):
-        return []
+        return [], []
     try:
         parsed = ast.literal_eval(raw)
     except (ValueError, SyntaxError):
-        return []
+        return [], []
     if not isinstance(parsed, list):
-        return []
-    return [d.get(field) for d in parsed if isinstance(d, dict) and d.get(field)]
+        return [], []
+    codes, names = [], []
+    for d in parsed:
+        if not isinstance(d, dict):
+            continue
+        code, name = d.get(code_field), d.get("name")
+        if code:
+            codes.append(code)
+        if name:
+            names.append(name)
+    return codes, names
 
 
 def load_extended(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
@@ -76,14 +89,14 @@ def load_extended(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
     # eventual normalized countries/language tables use the code as their
     # primary key, so dropping it here would force a fragile name-based
     # re-match later.
-    df["production_country_codes"] = df["production_countries"].apply(
-        lambda v: _parse_field(v, "iso_3166_1")
-    )
-    df["production_country_names"] = df["production_countries"].apply(
-        lambda v: _parse_field(v, "name")
-    )
-    df["spoken_language_codes"] = df["spoken_languages"].apply(lambda v: _parse_field(v, "iso_639_1"))
-    df["spoken_language_names"] = df["spoken_languages"].apply(lambda v: _parse_field(v, "name"))
+    countries = df["production_countries"].apply(lambda v: _parse_codes_and_names(v, "iso_3166_1"))
+    df["production_country_codes"] = countries.apply(lambda t: t[0])
+    df["production_country_names"] = countries.apply(lambda t: t[1])
+
+    languages = df["spoken_languages"].apply(lambda v: _parse_codes_and_names(v, "iso_639_1"))
+    df["spoken_language_codes"] = languages.apply(lambda t: t[0])
+    df["spoken_language_names"] = languages.apply(lambda t: t[1])
+
     df = df.drop(columns=["production_countries", "spoken_languages"])
     return df
 
@@ -193,6 +206,22 @@ def main():
     print(
         f"{len(known_profit)}/{len(movie_objs)} movies have a computable profit "
         f"(total: {sum(known_profit):,.0f})"
+    )
+
+    # Demonstrate the dict-based utilities (data_processor.py) and the
+    # Rating class over the raw ratings records.
+    raw_ratings_records = load_json(RAW_DIR / "ratings.json")
+    ratings_by_id = index_by_movie_id(raw_ratings_records)
+    summaries = apply_transform(
+        list(ratings_by_id.values()),
+        lambda r: {"movie_id": r["movie_id"], "avg_rating": r["ratings_summary"]["avg_rating"]},
+    )
+    rating_objs = [Rating.from_dict(r) for r in ratings_by_id.values()]
+    known_avg = [r.avg_rating for r in rating_objs if r.avg_rating is not None]
+    print(
+        f"{len(rating_objs)} ratings loaded via data_processor utilities, "
+        f"mean avg_rating: {sum(known_avg) / len(known_avg):.2f} "
+        f"(cross-checked via {len(summaries)} dict-transformed summaries)"
     )
 
 

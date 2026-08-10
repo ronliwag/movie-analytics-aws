@@ -7,7 +7,15 @@ import psycopg2
 from dotenv import load_dotenv
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
+from pyspark.sql.types import (
+    DateType,
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
 
 load_dotenv()
 
@@ -36,6 +44,40 @@ MOVIE_EXTENDED_SCHEMA = StructType(
         # raw, to be parsed properly in a later cleaning step.
         StructField("production_countries", StringType(), True),
         StructField("spoken_languages", StringType(), True),
+    ]
+)
+
+# Column order here must match the real CSV column order exactly -- Spark
+# applies an explicit `schema` positionally, not by matching header names.
+CLEAN_MOVIES_SCHEMA = StructType(
+    [
+        StructField("id", IntegerType(), True),
+        StructField("title", StringType(), True),
+        StructField("release_date", DateType(), True),
+        StructField("budget", DoubleType(), True),
+        StructField("revenue", DoubleType(), True),
+    ]
+)
+
+CLEAN_EXTENDED_SCHEMA = StructType(
+    [
+        StructField("id", IntegerType(), True),
+        StructField("genres", StringType(), True),
+        StructField("production_companies", StringType(), True),
+        StructField("production_country_codes", StringType(), True),
+        StructField("production_country_names", StringType(), True),
+        StructField("spoken_language_codes", StringType(), True),
+        StructField("spoken_language_names", StringType(), True),
+    ]
+)
+
+CLEAN_RATINGS_SCHEMA = StructType(
+    [
+        StructField("movie_id", IntegerType(), True),
+        StructField("last_rated", TimestampType(), True),
+        StructField("avg_rating", DoubleType(), True),
+        StructField("total_ratings", IntegerType(), True),
+        StructField("std_dev", DoubleType(), True),
     ]
 )
 
@@ -80,13 +122,13 @@ def clean(spark: SparkSession, processed_dir: Path | None = None) -> dict[str, D
     base = processed_dir or (DATA_DIR / "processed")
     return {
         "movies_main": spark.read.csv(
-            str(base / "movies_main_clean.csv"), header=True, inferSchema=True
+            str(base / "movies_main_clean.csv"), header=True, schema=CLEAN_MOVIES_SCHEMA
         ),
         "movie_extended": spark.read.csv(
-            str(base / "movie_extended_clean.csv"), header=True, inferSchema=True
+            str(base / "movie_extended_clean.csv"), header=True, schema=CLEAN_EXTENDED_SCHEMA
         ),
         "ratings": spark.read.csv(
-            str(base / "ratings_clean.csv"), header=True, inferSchema=True
+            str(base / "ratings_clean.csv"), header=True, schema=CLEAN_RATINGS_SCHEMA
         ),
     }
 

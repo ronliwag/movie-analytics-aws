@@ -15,7 +15,7 @@ from pathlib import Path
 _KNOWN_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%d-%m-%Y", "%B %d, %Y"]
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path) -> dict | list:
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
