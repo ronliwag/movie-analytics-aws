@@ -2,12 +2,44 @@ version: 2
 
 models:
   - name: fct_movie_performance
-    description: Analytics-ready fact table consumed directly by the Power BI dashboard.
+    description: >
+      Analytics-ready fact table consumed directly by the Power BI
+      dashboard. One row per movie_id. Weighted avg rating, reach index,
+      quality/reach percentile, Distribution Gap Score, and the
+      ratings-volume confidence flag are Power BI DAX measures computed
+      from these columns, not columns here -- see docs/DATA_MODEL.md
+      sections 4 and 6.
     columns:
       - name: movie_id
         tests:
           - unique
           - not_null
+      - name: title
+        description: Movie title.
+      - name: original_title
+        description: Movie title in its original (non-translated) form.
+      - name: original_language_code
+        description: ISO 639-1 code of the movie's original spoken language. FK to dim_language.iso_639_1_code.
+      - name: release_date
+        description: Theatrical release date.
+      - name: budget
+        description: Disclosed production budget in USD. Null where undisclosed.
+      - name: revenue
+        description: Disclosed box-office revenue in USD. Null where undisclosed.
+      - name: profit
+        description: revenue - budget. Null unless both are disclosed -- never imputed.
+      - name: avg_rating
+        description: Mean user rating for the movie. Null for the ~2,266 movies with no rating data.
+      - name: total_ratings
+        description: Count of individual ratings behind avg_rating -- confidence/volume signal.
+      - name: std_dev
+        description: Standard deviation of individual ratings -- lower means more consistent reception.
+      - name: last_rated
+        description: Timestamp of the most recent rating included in the summary.
+      - name: reach_country_count
+        description: Distinct production countries for this movie.
+      - name: reach_language_count
+        description: Distinct spoken languages for this movie.
 
   - name: dim_genre
     description: Deduped genre catalog.

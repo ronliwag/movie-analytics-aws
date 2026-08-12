@@ -2,12 +2,26 @@ version: 2
 
 models:
   - name: int_movies_joined
-    description: Movies joined to their ratings and extended metadata.
+    description: >
+      One row per movie_id, joining stg_movies to ratings and extended
+      metadata, plus computed profit and reach counts. Feeds
+      fct_movie_performance directly (a plain passthrough) and the Power
+      BI DAX measures built on top of it.
     columns:
       - name: movie_id
         tests:
           - unique
           - not_null
+      - name: original_title
+        description: Movie title in its original (non-translated) form.
+      - name: original_language_code
+        description: ISO 639-1 code of the movie's original spoken language. FK to dim_language.iso_639_1_code.
+      - name: profit
+        description: revenue - budget. Null unless both are disclosed -- never imputed.
+      - name: reach_country_count
+        description: Distinct production countries for this movie (from int_movie_countries). 0, not null, when there are none.
+      - name: reach_language_count
+        description: Distinct spoken languages for this movie (from int_movie_languages). 0, not null, when there are none.
 
   - name: int_movie_genres
     description: One row per (movie_id, genre_name), split from stg_movie_extended.genres.
