@@ -121,12 +121,18 @@ def get_spark() -> SparkSession:
 
 
 def load_movies(spark: SparkSession) -> DataFrame:
-    df = spark.read.csv(str(SOURCE_DIR / "movies_main.csv"), header=True, schema=MOVIES_MAIN_SCHEMA)
+    # escape="\"" -- these CSVs use RFC4180 doubled-quote escaping (pandas'
+    # to_csv default), not Spark's default backslash escape. Without this,
+    # any field with an embedded quote (e.g. a company name like `"Syrena"`)
+    # silently shifts every column after it left by one for that row.
+    df = spark.read.option("escape", '"').csv(
+        str(SOURCE_DIR / "movies_main.csv"), header=True, schema=MOVIES_MAIN_SCHEMA
+    )
     return df.withColumn("id", F.col("id").cast(IntegerType()))
 
 
 def load_extended(spark: SparkSession) -> DataFrame:
-    df = spark.read.csv(
+    df = spark.read.option("escape", '"').csv(
         str(SOURCE_DIR / "movie_extended.csv"), header=True, schema=MOVIE_EXTENDED_SCHEMA
     )
     return df.withColumn("id", F.col("id").cast(IntegerType()))
@@ -148,14 +154,17 @@ def clean(spark: SparkSession, processed_dir: Path | None = None) -> dict[str, D
     -- one per raw source, mirroring raw.movies_main/movie_extended/ratings."""
     
     base = processed_dir or (DATA_DIR / "processed")
+    # escape="\"" -- see load_movies()'s comment. Same RFC4180 vs. Spark-
+    # default mismatch applies to scripts/pandas/clean_data.py's to_csv()
+    # output.
     return {
-        "movies_main": spark.read.csv(
+        "movies_main": spark.read.option("escape", '"').csv(
             str(base / "movies_main_clean.csv"), header=True, schema=CLEAN_MOVIES_SCHEMA
         ),
-        "movie_extended": spark.read.csv(
+        "movie_extended": spark.read.option("escape", '"').csv(
             str(base / "movie_extended_clean.csv"), header=True, schema=CLEAN_EXTENDED_SCHEMA
         ),
-        "ratings": spark.read.csv(
+        "ratings": spark.read.option("escape", '"').csv(
             str(base / "ratings_clean.csv"), header=True, schema=CLEAN_RATINGS_SCHEMA
         ),
     }
