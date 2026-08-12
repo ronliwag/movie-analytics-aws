@@ -1,5 +1,3 @@
--- TODO: flatten the nested rating summaries from the source table into
--- one row per (movie_id, rating_source) — mirrors the Week 2 Rating class.
 
 with source as (
 
@@ -7,5 +5,10 @@ with source as (
 
 )
 
-select *
+select
+    movie_id::integer as movie_id,
+    last_rated::timestamp as last_rated,
+    avg_rating::double precision as avg_rating,
+    total_ratings::integer as total_ratings,
+    std_dev::double precision as std_dev
 from source
