@@ -3,9 +3,11 @@ version: 2
 sources:
   - name: movie_analytics_raw
     description: >
-      Tables written by the PySpark job in scripts/pyspark/transform.py.
-    # TODO: point `database`/`schema` at wherever your PySpark job wrote to.
-    schema: raw
+      Cleaned tables written by scripts/pyspark/transform.py's clean() step
+      (sourced from data/processed/*.csv, the pandas-cleaned output) — not
+      the raw schema, which holds the unstandardized data/enriched/*.csv
+      load.
+    schema: clean
     tables:
       - name: movies_main
       - name: ratings

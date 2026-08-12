@@ -15,16 +15,37 @@ PostgreSQL or read from Parquet via an external/staged source).
   directly. Reference upstream models with `ref()`, never `source()`
   directly in a mart.
 
-## Setup
+## Naming conventions
+- `stg_*` — staging models
+- `int_*` — intermediate models
+- `fct_*` / `dim_*` — marts (fact tables vs. dimension tables)
+
+## Local setup
+
+- **Warehouse:** Postgres (`dbt-postgres`), the same database
+  `scripts/pyspark/transform.py` writes to over JDBC.
+- **Profile:** `~/.dbt/profiles.yml` (outside the repo — never commit
+  credentials there). Profile name `movie_analytics` must match
+  `dbt_project.yml`'s `profile:` key. Uses `env_var()` to read
+  `DB_HOST`/`DB_PORT`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` from the shell
+  environment, and builds into the `analytics` schema.
+- **Sources:** `models/staging/sources.yml` points at the `clean` schema
+  (Phase 1's pandas-cleaned output, loaded by `transform.py`'s `clean()`
+  step) — not `raw`, which holds the unstandardized load.
+- **Invocation:** since `profiles.yml` uses `env_var()`, `.env` needs to be
+  loaded into the shell first. Use the `dotenv` CLI already in the venv:
 
 ```
-cd dbt_project
-dbt deps
-dbt seed      # if you add seed files
-dbt run
-dbt test
-dbt docs generate && dbt docs serve
+dotenv run -- dbt deps --project-dir dbt_project
+dotenv run -- dbt debug --project-dir dbt_project
+dotenv run -- dbt run --project-dir dbt_project
+dotenv run -- dbt test --project-dir dbt_project
+dotenv run -- dbt docs generate --project-dir dbt_project && dbt docs serve --project-dir dbt_project
 ```
+
+Always pass `--project-dir dbt_project` (rather than `cd`-ing into it) so
+dbt's log file lands in the gitignored `dbt_project/logs/`, not a stray
+`logs/` at the repo root.
 
 ## Tasks
 - Declare `movies_main`, `ratings`, `movie_extended` (or your PySpark
