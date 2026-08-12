@@ -8,3 +8,49 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: int_movie_genres
+    description: One row per (movie_id, genre_name), split from stg_movie_extended.genres.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: int_movie_companies
+    description: One row per (movie_id, company_name), split from stg_movie_extended.production_companies.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: int_movie_countries
+    description: >
+      One row per (movie_id, country_code, country_name), zipped from
+      stg_movie_extended's production_country_codes/_names pair.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: int_movie_languages
+    description: >
+      One row per (movie_id, language_code, language_name), zipped from
+      stg_movie_extended's spoken_language_codes/_names pair.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: int_movie_directors
+    description: One row per (movie_id, person_name), split from stg_movie_extended.director.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+
+  - name: int_movie_cast
+    description: One row per (movie_id, person_name), split from stg_movie_extended.cast_members.
+    columns:
+      - name: movie_id
+        tests:
+          - not_null

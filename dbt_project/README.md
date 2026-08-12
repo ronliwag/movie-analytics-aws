@@ -19,6 +19,9 @@ PostgreSQL or read from Parquet via an external/staged source).
 - `stg_*` — staging models
 - `int_*` — intermediate models
 - `fct_*` / `dim_*` — marts (fact tables vs. dimension tables)
+- Bridge (many-to-many join) tables use the bare `movie_<entity>` name, no
+  prefix — matches the ERD and Power BI relationship notes in
+  `docs/DATA_MODEL.md` (e.g. `movie_genre`, `movie_country`).
 - Primary key is always `movie_id` (staging renames the source `id` column
   on first contact).
 - Money columns (`budget`, `revenue`) are cast to `numeric(15,2)` in
