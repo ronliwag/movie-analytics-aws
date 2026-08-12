@@ -1,5 +1,18 @@
 """Pandas cleaning pipeline for movies_main.csv / movie_extended.csv / ratings.json.
 
+Reads from data/enriched/ (scripts/enrichment/fill_missing.py,
+movielens_ratings.py, validate_records.py), not data/raw/ -- enrichment
+fills gaps and corrects values but doesn't dedupe, drop corrupt rows, or
+standardize formats, so this step still needs to run against it exactly as
+it would against data/raw/. Requires enrichment to have been run at least
+once already; see scripts/enrichment/README.md.
+
+movie_extended.csv has 4 columns enrichment added that don't exist in
+data/raw/ at all: original_title, original_language, director, cast.
+director/cast are comma-joined name lists like genres/production_companies
+and are split into arrays the same way; original_title/original_language
+are single values and pass through untouched.
+
 Run: python -m scripts.pandas.clean_data
 """
 
@@ -14,11 +27,11 @@ from pathlib import Path
 from scripts.pandas.data_processor import apply_transform, index_by_movie_id, load_json, standardize_date
 from scripts.pandas.models import Movie, Rating
 
-RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
+SOURCE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
 PROCESSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
 
 
-def load_movies(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+def load_movies(raw_dir: Path = SOURCE_DIR) -> pd.DataFrame:
     df = pd.read_csv(raw_dir / "movies_main.csv")
     # 3 rows in the source have shifted/garbage columns (e.g. a date string
     # in `id`) -- pandas keeps `id` as an object column because of them, so
@@ -30,7 +43,7 @@ def load_movies(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
     return df
 
 
-def load_ratings(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+def load_ratings(raw_dir: Path = SOURCE_DIR) -> pd.DataFrame:
     with open(raw_dir / "ratings.json", "r", encoding="utf-8") as f:
         records = json.load(f)
 
@@ -80,11 +93,16 @@ def _parse_codes_and_names(raw, code_field: str) -> tuple[list, list]:
     return codes, names
 
 
-def load_extended(raw_dir: Path = RAW_DIR) -> pd.DataFrame:
+def load_extended(raw_dir: Path = SOURCE_DIR) -> pd.DataFrame:
     df = pd.read_csv(raw_dir / "movie_extended.csv")
     df["id"] = pd.to_numeric(df["id"], errors="coerce")
     df["genres"] = df["genres"].apply(_split_list)
     df["production_companies"] = df["production_companies"].apply(_split_list)
+    # director/cast are comma-joined name lists the same way genres/
+    # production_companies are (see fill_missing.py's fill_extended_row) --
+    # split them the same way for consistency.
+    df["director"] = df["director"].apply(_split_list)
+    df["cast"] = df["cast"].apply(_split_list)
     # Keep both the ISO code and the display name (parallel arrays) -- the
     # eventual normalized countries/language tables use the code as their
     # primary key, so dropping it here would force a fragile name-based
@@ -210,7 +228,7 @@ def main():
 
     # Demonstrate the dict-based utilities (data_processor.py) and the
     # Rating class over the raw ratings records.
-    raw_ratings_records = load_json(RAW_DIR / "ratings.json")
+    raw_ratings_records = load_json(SOURCE_DIR / "ratings.json")
     ratings_by_id = index_by_movie_id(raw_ratings_records)
     summaries = apply_transform(
         list(ratings_by_id.values()),
