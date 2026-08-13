@@ -20,26 +20,69 @@ models:
         description: Movie title in its original (non-translated) form.
       - name: original_language_code
         description: ISO 639-1 code of the movie's original spoken language. FK to dim_language.iso_639_1_code.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_language')
+                field: iso_639_1_code
       - name: release_date
         description: Theatrical release date.
       - name: budget
         description: Disclosed production budget in USD. Null where undisclosed.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
       - name: revenue
         description: Disclosed box-office revenue in USD. Null where undisclosed.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
       - name: profit
         description: revenue - budget. Null unless both are disclosed -- never imputed.
       - name: avg_rating
         description: Mean user rating for the movie. Null for the ~2,266 movies with no rating data.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0.5
+                max_value: 5.0
+                inclusive: true
       - name: total_ratings
         description: Count of individual ratings behind avg_rating -- confidence/volume signal.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
       - name: std_dev
         description: Standard deviation of individual ratings -- lower means more consistent reception.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
       - name: last_rated
         description: Timestamp of the most recent rating included in the summary.
       - name: reach_country_count
         description: Distinct production countries for this movie.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
       - name: reach_language_count
         description: Distinct spoken languages for this movie.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
 
   - name: dim_genre
     description: Deduped genre catalog.
@@ -77,6 +120,10 @@ models:
           - not_null
       - name: name
         description: Country display name. Null for the small number of rows with a code but no matching name in the source (see docs/DATA_MODEL.md known limitations).
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "iso_3166_1_code ~ '^[A-Za-z]{2}$'"
 
   - name: dim_language
     description: >
@@ -95,6 +142,10 @@ models:
         description: Language display name, from the iso_639_1 seed (or a TMDB-specific override for cn/xx, which aren't real ISO 639-1 codes).
         tests:
           - not_null
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "iso_639_1_code ~ '^[a-z]{2}$' or iso_639_1_code in ('cn', 'xx')"
 
   - name: dim_person
     description: >
@@ -118,9 +169,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: genre_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_genre')
+                field: genre_id
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -134,9 +193,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: production_company_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_production_company')
+                field: production_company_id
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -150,9 +217,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: iso_3166_1_code
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso_3166_1_code
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -166,9 +241,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: iso_639_1_code
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_language')
+                field: iso_639_1_code
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -182,9 +265,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: person_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_person')
+                field: person_id
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -198,9 +289,17 @@ models:
       - name: movie_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
       - name: person_id
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_person')
+                field: person_id
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
