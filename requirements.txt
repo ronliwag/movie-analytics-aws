@@ -6,6 +6,7 @@ python-dotenv>=1.0
 pytest>=8.0
 dbt-postgres>=1.8
 requests>=2.31
+pycountry>=24.6  # scripts/enrichment/generate_iso_639_1_seed.py only, not the pipeline itself
 
 # Airflow is NOT installed via this file — use the Docker Compose setup
 # in airflow/README.md instead (see that file for why).

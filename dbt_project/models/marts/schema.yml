@@ -83,6 +83,8 @@ models:
       Deduped language catalog. Codes come from both the spoken-language
       bridge and every movie's original_language_code, so movies.
       original_language_code (Task 4) resolves against this dimension too.
+      Display names come from the iso_639_1 seed (ISO 639-1 standard English
+      names), not TMDB's spoken_language_names -- see model header comment.
     columns:
       - name: iso_639_1_code
         description: ISO 639-1 language code. Natural primary key.
@@ -90,7 +92,9 @@ models:
           - unique
           - not_null
       - name: name
-        description: Language display name. Null where only an original_language_code reference exists with no matching spoken-language name.
+        description: Language display name, from the iso_639_1 seed (or a TMDB-specific override for cn/xx, which aren't real ISO 639-1 codes).
+        tests:
+          - not_null
 
   - name: dim_person
     description: >

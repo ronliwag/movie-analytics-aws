@@ -156,17 +156,29 @@ time allows.
   this root-cause fix. The `~ '^[A-Za-z]{2}$'`/`~ '^[a-z]{2}$'` guards in
   `int_movie_countries`/`int_movie_languages`/`dim_language` are kept as a
   defensive check, but no longer filter out anything.
-- **`dim_country`/`dim_language` pick their display name with
-  `mode() within group (...)`, not `min()`** — deliberately: with `min()`,
-  a single noisy/mismatched row (see above) can beat the overwhelmingly
-  common correct name purely by string sort order (e.g. `ar` briefly
-  resolved to `Français` instead of `العربية` because a French name
-  happened to sort first, even though 361 movies correctly paired `ar`
-  with `العربية` and only 1 didn't). `mode()` picks whichever name most
-  movies actually agree on. Very rare codes (a handful of total
-  occurrences catalog-wide) can still resolve to an arbitrary tied name
-  when the underlying data is itself too thin/noisy to have a real
-  majority — an inherent data limitation, not an aggregation bug.
+- **`dim_country` picks its display name with `mode() within group (...)`,
+  not `min()`** — deliberately: with `min()`, a single noisy/mismatched row
+  (see above) can beat the overwhelmingly common correct name purely by
+  string sort order (e.g. `ar` briefly resolved to `Français` instead of
+  `العربية` because a French name happened to sort first, even though 361
+  movies correctly paired `ar` with `العربية` and only 1 didn't). `mode()`
+  picks whichever name most movies actually agree on. Very rare codes (a
+  handful of total occurrences catalog-wide) can still resolve to an
+  arbitrary tied name when the underlying data is itself too
+  thin/noisy to have a real majority — an inherent data limitation, not an
+  aggregation bug.
+- **`dim_language` no longer derives its display name from TMDB's
+  spoken_language_names at all** — it looks up the ISO 639-1 standard
+  English name from the `iso_639_1` seed instead (`cn`/`xx` are named
+  explicitly, since they're TMDB conventions, not real ISO 639-1 codes).
+  19 of the 140 codes in this catalog have no native-language name
+  anywhere in the pipeline: TMDB's own raw export leaves `name` blank for
+  them even at the source (e.g. `to`: `[{'iso_639_1': 'to', 'name': ''}]`
+  in `data/raw/movie_extended.csv`), so `mode()`-style voting over the
+  per-movie pairings could never have recovered a value for those rows —
+  there was nothing to vote on. Sourcing every code's name from one
+  external reference keeps the column consistent rather than mixing
+  TMDB's native-script names with an English fallback for just the gaps.
 - **Comma-joined multi-valued columns can't distinguish an embedded comma
   in a single name from a delimiter between two names** (e.g. a
   production company literally named "X, Y & Z Productions" would
