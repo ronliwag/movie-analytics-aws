@@ -11,6 +11,7 @@ models:
       sections 4 and 6.
     columns:
       - name: movie_id
+        description: Primary key. Grain of this table -- one row per movie.
         tests:
           - unique
           - not_null
@@ -85,7 +86,7 @@ models:
                 inclusive: true
 
   - name: dim_genre
-    description: Deduped genre catalog.
+    description: "{{ doc('dim_genre') }}"
     columns:
       - name: genre_id
         description: Surrogate key, hashed from the normalized (lower/trimmed) genre name.
@@ -98,7 +99,7 @@ models:
           - not_null
 
   - name: dim_production_company
-    description: Deduped production company catalog.
+    description: "{{ doc('dim_production_company') }}"
     columns:
       - name: production_company_id
         description: Surrogate key, hashed from the normalized (lower/trimmed) company name.
@@ -111,7 +112,7 @@ models:
           - not_null
 
   - name: dim_country
-    description: Deduped country catalog.
+    description: "{{ doc('dim_country') }}"
     columns:
       - name: iso_3166_1_code
         description: ISO 3166-1 country code. Natural primary key.
@@ -126,12 +127,7 @@ models:
             expression: "iso_3166_1_code ~ '^[A-Za-z]{2}$'"
 
   - name: dim_language
-    description: >
-      Deduped language catalog. Codes come from both the spoken-language
-      bridge and every movie's original_language_code, so movies.
-      original_language_code (Task 4) resolves against this dimension too.
-      Display names come from the iso_639_1 seed (ISO 639-1 standard English
-      names), not TMDB's spoken_language_names -- see model header comment.
+    description: "{{ doc('dim_language') }}"
     columns:
       - name: iso_639_1_code
         description: ISO 639-1 language code. Natural primary key.
@@ -148,10 +144,7 @@ models:
             expression: "iso_639_1_code ~ '^[a-z]{2}$' or iso_639_1_code in ('cn', 'xx')"
 
   - name: dim_person
-    description: >
-      Deduped person catalog, shared by movie_director and movie_cast.
-      Name-based, not TMDB-id-based -- see docs/DATA_MODEL.md known
-      limitations.
+    description: "{{ doc('dim_person') }}"
     columns:
       - name: person_id
         description: Surrogate key, hashed from the normalized (lower/trimmed) person name.
@@ -167,6 +160,7 @@ models:
     description: Bridge, grain one row per (movie_id, genre_id).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -174,6 +168,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: genre_id
+        description: FK to dim_genre.genre_id.
         tests:
           - not_null
           - relationships:
@@ -191,6 +186,7 @@ models:
     description: Bridge, grain one row per (movie_id, production_company_id).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -198,6 +194,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: production_company_id
+        description: FK to dim_production_company.production_company_id.
         tests:
           - not_null
           - relationships:
@@ -215,6 +212,7 @@ models:
     description: Bridge, grain one row per (movie_id, iso_3166_1_code).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -222,6 +220,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: iso_3166_1_code
+        description: FK to dim_country.iso_3166_1_code. A movie's production country -- reach signal, secondary origin view.
         tests:
           - not_null
           - relationships:
@@ -239,6 +238,7 @@ models:
     description: Bridge, grain one row per (movie_id, iso_639_1_code).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -246,6 +246,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: iso_639_1_code
+        description: FK to dim_language.iso_639_1_code. A movie's spoken language -- reach signal, distinct from the single original_language_code on fct_movie_performance.
         tests:
           - not_null
           - relationships:
@@ -263,6 +264,7 @@ models:
     description: Bridge, grain one row per (movie_id, person_id).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -270,6 +272,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: person_id
+        description: FK to dim_person.person_id, in this table's director role. The same person_id can also appear in movie_cast if that person acted somewhere too -- dim_person doesn't distinguish roles.
         tests:
           - not_null
           - relationships:
@@ -287,6 +290,7 @@ models:
     description: Bridge, grain one row per (movie_id, person_id).
     columns:
       - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
         tests:
           - not_null
           - relationships:
@@ -294,6 +298,7 @@ models:
                 to: ref('fct_movie_performance')
                 field: movie_id
       - name: person_id
+        description: FK to dim_person.person_id, in this table's cast role. The same person_id can also appear in movie_director if that person directed somewhere too -- dim_person doesn't distinguish roles.
         tests:
           - not_null
           - relationships:

@@ -1,8 +1,3 @@
--- Deduped production company catalog. production_company_id is a
--- surrogate key hashed from the normalized name -- movie_company.sql
--- computes the same hash independently, so no join is needed to resolve
--- the FK.
-
 with company_names as (
 
     select distinct company_name from {{ ref('int_movie_companies') }}

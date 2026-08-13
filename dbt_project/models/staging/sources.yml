@@ -10,5 +10,60 @@ sources:
     schema: clean
     tables:
       - name: movies_main
+        description: Core movie records -- one row per movie. Renamed to stg_movies (id -> movie_id) in staging.
+        columns:
+          - name: id
+            description: TMDB movie id. Renamed movie_id in stg_movies.
+          - name: title
+            description: Movie title (may be a translated release title, not necessarily original_title).
+          - name: release_date
+            description: Theatrical release date.
+          - name: budget
+            description: Disclosed production budget in USD. Null/0 where undisclosed -- cast to numeric(15,2) and nulled at 0 in staging.
+          - name: revenue
+            description: Disclosed box-office revenue in USD. Null/0 where undisclosed -- cast to numeric(15,2) and nulled at 0 in staging.
+
       - name: ratings
+        description: One rating summary per movie_id (not present for every movie -- see stg_ratings). Renamed to stg_ratings, columns otherwise unchanged.
+        columns:
+          - name: movie_id
+            description: FK to movies_main.id.
+          - name: last_rated
+            description: Timestamp of the most recent rating included in this summary.
+          - name: avg_rating
+            description: Mean user rating, MovieLens 0.5-5.0 scale.
+          - name: total_ratings
+            description: Count of individual ratings behind avg_rating.
+          - name: std_dev
+            description: Standard deviation of individual ratings.
+
       - name: movie_extended
+        description: >
+          Extended per-movie metadata -- genres, cast/crew, production
+          companies, and country/language code+name pairs, several columns
+          comma-packed (multiple values per cell). Renamed to
+          stg_movie_extended; the comma-packed columns are split into
+          bridge-table rows in the intermediate layer, not in staging.
+        columns:
+          - name: id
+            description: TMDB movie id. Renamed movie_id in stg_movie_extended.
+          - name: genres
+            description: Comma-separated genre names.
+          - name: production_companies
+            description: Comma-separated production company names.
+          - name: original_title
+            description: Movie title in its original (non-translated) form.
+          - name: original_language
+            description: ISO 639-1 code of the movie's original spoken language. Renamed original_language_code in staging.
+          - name: director
+            description: Comma-separated director name(s), usually one.
+          - name: cast
+            description: Comma-separated cast names. Renamed cast_members in staging -- `cast` is a reserved SQL keyword.
+          - name: production_country_codes
+            description: Comma-separated ISO 3166-1 country codes, position-aligned with production_country_names.
+          - name: production_country_names
+            description: Comma-separated country names, position-aligned with production_country_codes.
+          - name: spoken_language_codes
+            description: Comma-separated ISO 639-1 language codes, position-aligned with spoken_language_names.
+          - name: spoken_language_names
+            description: Comma-separated language names (TMDB's own, often blank for less-common languages), position-aligned with spoken_language_codes.

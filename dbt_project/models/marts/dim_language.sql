@@ -1,23 +1,3 @@
--- Deduped language catalog, keyed by its natural ISO 639-1 code. Codes come
--- from two sources -- spoken languages (int_movie_languages) and each
--- movie's original_language_code, since 1,487 movies (checked live against
--- analytics.stg_movie_extended) have an original_language_code not present
--- in their own spoken_language_codes list. Without this union,
--- movies.original_language_code (wired up in Task 4) would have
--- thousands of orphaned FKs.
---
--- `name` is looked up from the iso_639_1 seed (ISO 639-1 standard English
--- names) rather than taken from TMDB's spoken_language_names. TMDB's own
--- raw export leaves `name` blank for 19 of these codes even at the source
--- (spot-checked in data/raw/movie_extended.csv, e.g. `to`:
--- [{'iso_639_1': 'to', 'name': ''}]) -- there's no native-language value to
--- recover for them from anywhere in this pipeline. Sourcing every code's
--- name from one authoritative external reference keeps the column
--- consistent instead of mixing TMDB's native-script names with an English
--- fallback for just the gaps. `cn` (Cantonese) and `xx` (TMDB's "no
--- language" placeholder) aren't real ISO 639-1 codes -- TMDB-specific
--- conventions -- so they're named explicitly rather than looked up.
-
 with codes as (
 
     select language_code

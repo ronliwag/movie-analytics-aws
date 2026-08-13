@@ -1,18 +1,3 @@
--- Join movies to ratings and extended metadata, one row per movie_id.
--- Business logic (profit, reach counts) belongs here, not in staging or
--- in the mart -- fct_movie_performance.sql stays a plain final `select *`.
---
--- Scope note (see docs/DATA_MODEL.md sections 4 and 6): weighted avg
--- rating, reach index, quality/reach percentile, Distribution Gap Score,
--- and the ratings-volume confidence flag are all Power BI DAX measures
--- computed live off this fact table (several depend on ALLSELECTED /a
--- user-adjustable slicer, so they can't be precomputed as static columns
--- here). This model builds the movie-grain ingredients those measures
--- consume, not the measures themselves.
---
--- LEFT JOIN everywhere -- ratings coverage is 43,167/45,433 movies (2,266
--- have no rating row) and must not be dropped from the fact table.
-
 with movies as (
 
     select * from {{ ref('stg_movies') }}
