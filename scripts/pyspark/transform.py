@@ -198,8 +198,14 @@ def ensure_schema(schema: str) -> None:
 
 
 def write_table(df: DataFrame, schema: str, table: str) -> None:
-    df.write.jdbc(
-        url=jdbc_url(), table=f"{schema}.{table}", mode="overwrite", properties=jdbc_properties()
+    # truncate=true makes overwrite mode TRUNCATE the existing table instead
+    # of DROP + recreate -- once dbt has built views on top of these tables
+    # (stg_movies etc. depend on clean.movies_main), a plain DROP fails with
+    # "cannot drop table ... because other objects depend on it". TRUNCATE
+    # clears rows without touching the table object, so dependent views
+    # keep working and this stays re-runnable on a schedule.
+    df.write.mode("overwrite").option("truncate", "true").jdbc(
+        url=jdbc_url(), table=f"{schema}.{table}", properties=jdbc_properties()
     )
 
 
