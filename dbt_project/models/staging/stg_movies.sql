@@ -8,7 +8,5 @@ with source as (
 select
     id::integer as movie_id,
     title,
-    release_date::date as release_date,
-    budget::numeric(15, 2) as budget,
-    revenue::numeric(15, 2) as revenue
+    release_date::date as release_date
 from source

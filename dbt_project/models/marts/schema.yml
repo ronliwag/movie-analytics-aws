@@ -28,22 +28,6 @@ models:
                 field: iso_639_1_code
       - name: release_date
         description: Theatrical release date.
-      - name: budget
-        description: Disclosed production budget in USD. Null where undisclosed.
-        tests:
-          - dbt_utils.accepted_range:
-              arguments:
-                min_value: 0
-                inclusive: true
-      - name: revenue
-        description: Disclosed box-office revenue in USD. Null where undisclosed.
-        tests:
-          - dbt_utils.accepted_range:
-              arguments:
-                min_value: 0
-                inclusive: true
-      - name: profit
-        description: revenue - budget. Null unless both are disclosed -- never imputed.
       - name: avg_rating
         description: Mean user rating for the movie. Null for the ~2,266 movies with no rating data.
         tests:
@@ -155,6 +139,31 @@ models:
         description: Person display name.
         tests:
           - not_null
+      - name: filmography_count
+        description: Distinct movies this person is linked to as director and/or cast (global, not market-scoped -- see docs/DATA_MODEL.md).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+      - name: earliest_release_date
+        description: Earliest release_date across this person's linked movies. Null if none of them have one.
+      - name: latest_release_date
+        description: Latest release_date across this person's linked movies. Null if none of them have one.
+      - name: career_span_years
+        description: Whole years between earliest_release_date and latest_release_date. Null if either is null.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: possible_name_collision
+        description: >
+          True when career_span_years > 60 -- heuristic flag that this
+          person_id may collapse two different real people sharing a name.
+          Surface this before recommending a market-scoped director/cast
+          pick to a negotiator. See docs/DATA_MODEL.md known limitations.
 
   - name: movie_genre
     description: Bridge, grain one row per (movie_id, genre_id).
@@ -305,9 +314,30 @@ models:
               arguments:
                 to: ref('dim_person')
                 field: person_id
+      - name: billing_order
+        description: >
+          TMDB cast billing position (1 = top-billed), proxied via list
+          position from the enrichment pass -- see int_movie_cast's doc
+          block and docs/DATA_MODEL.md known limitations. Lower is more
+          prominent; usually caps at 10 (background/ensemble credits
+          beyond the top 10 aren't captured at all), occasionally 11 due
+          to the embedded-comma splitting limitation (see
+          int_movie_cast.billing_order).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 11
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
               - movie_id
               - person_id
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - billing_order

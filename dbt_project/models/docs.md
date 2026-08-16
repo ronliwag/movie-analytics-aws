@@ -45,13 +45,57 @@ still resolve correctly via the trailing-NULL-pad behavior of parallel
 unnest.
 {% enddocs %}
 
+{% docs int_movie_cast %}
+One row per (movie_id, person_name), split from
+stg_movie_extended.cast_members, carrying `billing_order` -- the 1-indexed
+position in the comma list.
+
+`director`/`cast` never existed in the raw source at all -- both are new
+columns added wholesale by scripts/enrichment/fill_missing.py, which sorts
+`credits["cast"]` by TMDB's own `order` field before comma-joining
+(`sorted(credits["cast"], key=lambda c: c.get("order", 999))[:10]`). So
+there's no non-enriched cast population where position could diverge from
+the real TMDB order -- `billing_order` is a reliable proxy for it across
+the whole cast population, not just a subset. It's still a proxy, not the
+raw integer itself (never persisted), and it's capped at the top 10
+credited names per movie -- someone absent from movie_cast for a title may
+simply be outside the top 10, not unbilled.
+
+80 movies show billing_order up to 11, not 10 -- an embedded comma inside
+one of the 10 real names (e.g. a "Last, Jr." suffix) splits into an extra
+array element, the same comma-ambiguity limitation already documented for
+production_companies/genres in docs/DATA_MODEL.md. Not an 11th real
+credited person.
+{% enddocs %}
+
+{% docs int_person_filmography %}
+One row per person_id, aggregating every movie a person is linked to via
+movie_director or movie_cast (unioned -- a person who both directed and
+acted in the same movie counts that movie once). Feeds dim_person directly
+(a plain passthrough), matching how int_movies_joined feeds
+fct_movie_performance.
+
+`possible_name_collision` flags `career_span_years > 60` -- a heuristic
+mitigation for dim_person's name-based (not TMDB-id-based) person_id: two
+different real people sharing a name collapse into one row today, and an
+implausibly long credited career is the visible symptom. Doesn't fix the
+underlying collision (only capturing TMDB's actual person id in enrichment
+would), just surfaces it before a market-scoped talent recommendation
+reaches a negotiator. See docs/DATA_MODEL.md known limitations.
+
+LEFT JOIN to stg_movies for release_date -- a person with no release_date
+on any linked movie gets null earliest/latest_release_date and
+career_span_years, and possible_name_collision is null (not true), since
+there's nothing to compute a span from.
+{% enddocs %}
+
 {% docs int_movies_joined %}
 One row per movie_id, joining stg_movies to ratings and extended metadata,
-plus computed profit and reach counts. Feeds fct_movie_performance directly
-(a plain passthrough) and the Power BI DAX measures built on top of it.
+plus computed reach counts. Feeds fct_movie_performance directly (a plain
+passthrough) and the Power BI DAX measures built on top of it.
 
-Business logic (profit, reach counts) belongs here, not in staging or in
-the mart -- fct_movie_performance.sql stays a plain final `select *`.
+Business logic (reach counts) belongs here, not in staging or in the mart
+-- fct_movie_performance.sql stays a plain final `select *`.
 
 Scope note (see docs/DATA_MODEL.md sections 4 and 6): weighted avg rating,
 reach index, quality/reach percentile, Distribution Gap Score, and the
@@ -118,7 +162,13 @@ is a surrogate key hashed from the normalized (lower/trimmed) name -- both
 bridge models compute the same hash independently, so no join back to this
 table is needed to resolve the FK at insert time.
 
+Also carries filmography_count, earliest/latest_release_date,
+career_span_years, and possible_name_collision -- computed in
+int_person_filmography.sql (see that doc block), the talent-quality layer
+supporting the market-scoped director/cast track-record use case in
+docs/BUSINESS_ANGLE.md.
+
 Known limitation (see docs/DATA_MODEL.md): name-based, not TMDB-id-based,
 so two different real people sharing a name incorrectly collapse into one
-row here.
+row here. possible_name_collision is a heuristic mitigation, not a fix.
 {% enddocs %}
