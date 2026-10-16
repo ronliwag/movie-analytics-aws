@@ -2,24 +2,69 @@ version: 2
 
 models:
   - name: stg_movies
-    description: One row per movie, lightly cleaned from the raw source.
+    description: One row per movie, lightly cleaned from the `clean.movies_main` source.
     columns:
       - name: movie_id
         description: Primary key.
         tests:
           - unique
           - not_null
+      - name: title
+        description: Movie title.
+      - name: release_date
+        description: Theatrical release date, cast to date.
+      - name: budget
+        description: Disclosed production budget in USD, cast to numeric(15,2). Null where undisclosed.
+      - name: revenue
+        description: Disclosed box-office revenue in USD, cast to numeric(15,2). Null where undisclosed.
 
   - name: stg_ratings
-    description: One row per (movie_id, rating source).
+    description: One row per movie_id, lightly cleaned from the `clean.ratings` source.
     columns:
       - name: movie_id
+        description: Primary key. One rating summary per movie.
         tests:
+          - unique
           - not_null
+      - name: avg_rating
+        description: Mean user rating for the movie.
+      - name: total_ratings
+        description: Count of individual ratings behind avg_rating — used as a confidence/volume signal.
+      - name: std_dev
+        description: Standard deviation of individual ratings — lower means more consistent reception.
+      - name: last_rated
+        description: Timestamp of the most recent rating included in this summary.
 
   - name: stg_movie_extended
-    description: Extended movie metadata — genres, production companies, countries.
+    description: >
+      One row per movie, lightly cleaned from the `clean.movie_extended`
+      source. Stays wide — comma-packed columns (genres,
+      production_companies, director, cast_members, and the
+      country/language code+name pairs) are split into dimension/bridge
+      rows in the intermediate layer, not here.
     columns:
       - name: movie_id
+        description: Primary key. Foreign key to stg_movies.movie_id.
         tests:
+          - unique
           - not_null
+      - name: original_title
+        description: Movie title in its original (non-translated) form.
+      - name: original_language_code
+        description: ISO 639-1 code of the movie's original spoken language (renamed from source `original_language`).
+      - name: director
+        description: Comma-separated director name(s).
+      - name: cast_members
+        description: Comma-separated cast names (renamed from source `cast`, a reserved SQL keyword).
+      - name: genres
+        description: Comma-separated genre names — split into movie_genre bridge rows in the intermediate layer.
+      - name: production_companies
+        description: Comma-separated production company names — split into movie_company bridge rows in the intermediate layer.
+      - name: production_country_codes
+        description: Comma-separated ISO 3166-1 country codes, position-aligned with production_country_names.
+      - name: production_country_names
+        description: Comma-separated country names, position-aligned with production_country_codes.
+      - name: spoken_language_codes
+        description: Comma-separated ISO 639-1 language codes, position-aligned with spoken_language_names.
+      - name: spoken_language_names
+        description: Comma-separated language names, position-aligned with spoken_language_codes.
