@@ -1,7 +1,3 @@
--- Deduped genre catalog. genre_id is a surrogate key hashed from the
--- normalized name -- movie_genre.sql computes the same hash independently,
--- so no join is needed to resolve the FK.
-
 with genre_names as (
 
     select distinct genre_name from {{ ref('int_movie_genres') }}

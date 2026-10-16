@@ -1,6 +1,3 @@
--- Splits stg_movie_extended.director (comma-packed) into one row per
--- (movie_id, person_name). Grain: movie x director.
-
 with extended as (
 
     select movie_id, director

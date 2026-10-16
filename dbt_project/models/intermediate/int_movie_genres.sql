@@ -1,6 +1,3 @@
--- Splits stg_movie_extended.genres (comma-packed) into one row per
--- (movie_id, genre_name). Grain: movie x genre.
-
 with extended as (
 
     select movie_id, genres

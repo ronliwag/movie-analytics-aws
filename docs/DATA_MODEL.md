@@ -1,9 +1,21 @@
 # Data Model & Dashboard Plan — Global Scouting Map
 
-Blueprint for the dbt marts layer (Phase 2) and the Power BI dashboard, drawn
-up while only `data/processed/*.csv` (the cleaned output of
-`scripts/pandas/clean_data.py`) exists — no dbt models built yet. See
-[BUSINESS_ANGLE.md](BUSINESS_ANGLE.md) for the business angle this serves.
+Sections 1–3 describe the dbt marts layer (Phase 2) **as built** — table
+names, grains, and known limitations all reflect what's actually in
+`dbt_project/models/`, not the original plan. Originally drawn up while
+only `data/processed/*.csv` existed and no dbt models were built yet; kept
+updated since as the source of narrative/rationale ("why this shape"), not
+of column-by-column truth -- for the authoritative, always-current column
+list and lineage graph, run `dbt docs generate && dbt docs serve` from
+`dbt_project/` instead of trusting this doc's tables to have kept up with
+every schema.yml change.
+
+Sections 4–7 are still a **plan**, not as-built — Phase 3 (Power BI) hasn't
+started (`powerbi/` has no `.pbix` yet). This is the Phase 3 handoff: the
+schema those sections plan against is now final, so the measures/model
+notes/storyboard below can be built directly, not re-derived.
+
+See [BUSINESS_ANGLE.md](BUSINESS_ANGLE.md) for the business angle this serves.
 
 Grounded in the actual cleaned columns:
 
@@ -27,17 +39,17 @@ layer. Columns that are already single-valued (`title`, `release_date`,
 `budget`, `revenue`, `original_title`, `original_language`, ratings fields)
 map straight across with no splitting.
 
-| Cleaned source column | Target | Needs splitting? |
+| Cleaned source column | Target (as built) | Needs splitting? |
 |---|---|---|
-| `movies_main_clean.id/title/release_date/budget/revenue` | `movies` | No |
-| `movie_extended_clean.original_title/original_language` | `movies.original_title`, `movies.original_language_code` (FK) | No |
-| `movie_extended_clean.genres` | `genres` + `movie_genre` | Yes — comma list |
-| `movie_extended_clean.production_companies` | `production_company` + `movie_company` | Yes — comma list |
-| `movie_extended_clean.production_country_codes` + `_names` | `countries` + `movie_country` | Yes — two parallel comma lists, zipped position-by-position |
-| `movie_extended_clean.spoken_language_codes` + `_names` | `language` + `movie_language` | Yes — same zip pattern |
-| `movie_extended_clean.director` | `person` + `movie_director` | Yes (usually 1 value, same split logic) |
-| `movie_extended_clean.cast` | `person` + `movie_cast` | Yes — comma list |
-| `ratings_clean.*` | `ratings` | No — already 1 row per `movie_id` |
+| `movies_main_clean.id/title/release_date/budget/revenue` | `fct_movie_performance` (via `stg_movies` → `int_movies_joined`) | No |
+| `movie_extended_clean.original_title/original_language` | `fct_movie_performance.original_title`, `.original_language_code` (FK to `dim_language`) | No |
+| `movie_extended_clean.genres` | `dim_genre` + `movie_genre` (via `int_movie_genres`) | Yes — comma list |
+| `movie_extended_clean.production_companies` | `dim_production_company` + `movie_company` (via `int_movie_companies`) | Yes — comma list |
+| `movie_extended_clean.production_country_codes` + `_names` | `dim_country` + `movie_country` (via `int_movie_countries`) | Yes — two parallel comma lists, zipped position-by-position |
+| `movie_extended_clean.spoken_language_codes` + `_names` | `dim_language` + `movie_language` (via `int_movie_languages`) | Yes — same zip pattern; `dim_language.name` also draws on the `iso_639_1` seed, not just this column (see §3) |
+| `movie_extended_clean.director` | `dim_person` + `movie_director` (via `int_movie_directors`) | Yes (usually 1 value, same split logic) |
+| `movie_extended_clean.cast` | `dim_person` + `movie_cast` (via `int_movie_cast`) | Yes — comma list |
+| `ratings_clean.*` | `fct_movie_performance` (via `stg_ratings` → `int_movies_joined`) | No — already 1 row per `movie_id` |
 
 ### Worked example — one real movie, id `461257` ("Queerama")
 
@@ -55,24 +67,24 @@ ratings_clean:        movie_id=461257, avg_rating=3.83, total_ratings=3, std_dev
 
 Becomes, after mapping:
 
-- `movies`: 1 row (`461257, Queerama, en, 2017-06-09`)
-- `ratings`: 1 row (`461257, 3.83, 3, 1.04`)
-- `movie_genre`: **2 rows** — `genres="Music,Documentary"` splits into `Music` and `Documentary`, each pointing at its own (deduped, catalog-wide) `genre_id`
-- `movie_company`: 1 row — `ie ie productions`
-- `movie_country`: 1 row — `production_country_codes="GB"` paired with `production_country_names="United Kingdom"` at the same list position
-- `movie_language`: 1 row — `en` / `English`, same pairing logic
-- `movie_director`: 1 row — `Daisy Asquith`
-- `movie_cast`: **2 rows** — `Leigh Bowery` and `Quentin Crisp`
+- `fct_movie_performance`: 1 row (`461257, Queerama, en, 2017-06-09, ...`)
+- `movie_genre`: **2 rows** — `genres="Music,Documentary"` splits into `Music` and `Documentary`, each pointing at its own (deduped, catalog-wide) `genre_id` in `dim_genre`
+- `movie_company`: 1 row — `ie ie productions`, pointing at `dim_production_company`
+- `movie_country`: 1 row — `production_country_codes="GB"` paired with `production_country_names="United Kingdom"` at the same list position, pointing at `dim_country`
+- `movie_language`: 1 row — `en` / `English`, same pairing logic, pointing at `dim_language` (whose display name for `en` actually comes from the `iso_639_1` seed, not this row's `English` — see §3)
+- `movie_director`: 1 row — `Daisy Asquith`, pointing at `dim_person`
+- `movie_cast`: **2 rows** — `Leigh Bowery` and `Quentin Crisp`, both pointing at `dim_person`
 
-One movie's 3 wide source rows explode into 1 + 1 + 2 + 1 + 1 + 1 + 1 + 2 = 10
-normalized rows. Multiply across all ~45,000 movies — that's the entire job
-of the dbt staging/intermediate layer: split each comma-packed cell and
-write one row per value, reusing the same `genre_id`/`person_id`/etc.
-whenever the same name recurs on a different movie.
+One movie's 3 wide source rows explode into 1 fact row + 2 + 1 + 1 + 1 + 1 + 2
+= 8 bridge/dimension-linking rows. Multiply across all ~45,000 movies —
+that's the entire job of the dbt staging/intermediate layer: split each
+comma-packed cell and write one row per value, reusing the same
+`genre_id`/`person_id`/etc. whenever the same name recurs on a different
+movie.
 
-## 2. Target schema
+## 2. Target schema (as built)
 
-**Fact** — grain: one row per `movie_id`
+**Fact** — `fct_movie_performance`, grain: one row per `movie_id`
 
 ```
 fct_movie_performance
@@ -82,20 +94,33 @@ fct_movie_performance
   reach_country_count (computed), reach_language_count (computed)
 ```
 
-`profit` and the two `reach_*_count` columns are business logic, so they
-belong in `int_movies_joined.sql` (per that model's own header comment:
-"business logic... belongs here, not in staging or in the mart") —
-`fct_movie_performance.sql` should stay a plain final `select *`.
+`profit` and the two `reach_*_count` columns are business logic, computed in
+`int_movies_joined.sql` (per that model's own header comment: "business
+logic... belongs here, not in staging or in the mart") —
+`fct_movie_performance.sql` is a plain final `select *` on top of it.
 
 **Dimensions**
 
 ```
-language            (iso_639_1_code PK, name)   -- one table, reused for both roles (see §4)
-countries            (iso_3166_1_code PK, name)
-genres               (genre_id PK, name)
-production_company   (production_company_id PK, name)
-person               (person_id PK, name)
+dim_language            (iso_639_1_code PK, name)   -- one table, reused for both roles (see §4)
+dim_country             (iso_3166_1_code PK, name)
+dim_genre               (genre_id PK, name)
+dim_production_company  (production_company_id PK, name)
+dim_person              (person_id PK, name)
 ```
+
+`dim_genre`/`dim_production_company`/`dim_person` key off a surrogate
+`{{ dbt_utils.generate_surrogate_key(...) }}` hash of the normalized
+(lower/trimmed) name — the bridges below compute the same hash
+independently, so no join back to the dimension is needed to resolve the
+FK at insert time. `dim_country`/`dim_language` key off their natural ISO
+code instead (no surrogate key needed).
+
+`dim_language.name` does **not** come from `movie_extended`'s
+`spoken_language_names` (TMDB's own per-movie pairing) — it's looked up
+from a new **seed**, `iso_639_1` (`code`, `name`; ISO 639-1 code → English
+name), not present in the original plan. Added because TMDB's own raw
+export leaves the name blank for ~19 codes even at the source — see §3.
 
 **Bridges** — grain: one row per movie × entity
 
@@ -108,22 +133,24 @@ movie_director   (movie_id PFK, person_id PFK)
 movie_cast       (movie_id PFK, person_id PFK)
 ```
 
-`language` stays **one** table at the dbt/SQL level. The role-playing split
-(original vs. spoken) only happens later, at Power BI import (§4).
+`dim_language` stays **one** table at the dbt/SQL level. The role-playing
+split (original vs. spoken) only happens later, at Power BI import (§4).
 
-**Optional second mart** worth considering once Phase 2 starts, since the
-dbt rubric line rewards real modeling logic over passthroughs:
-`mart_market_scouting`, grain = one row per `original_language_code`,
-pre-aggregating weighted avg rating, total ratings volume, avg reach, and
-quality/reach percentiles in SQL. Not required to build the dashboard —
-`fct_movie_performance` alone is enough — but a stronger dbt submission if
-time allows.
+**Not built**: `mart_market_scouting` (grain = one row per
+`original_language_code`, pre-aggregating weighted avg rating, total
+ratings volume, avg reach, and quality/reach percentiles in SQL) was
+floated as an optional second mart if time allowed. Phase 2 wrapped
+without it — `fct_movie_performance` alone was enough for the dashboard, and
+every consumer of "as-built" (dbt docs, this doc, the tests) reflects only
+what's actually in `dbt_project/models/`. Still worth reconsidering for
+Phase 3 if a pre-aggregated market-grain table would simplify the DAX in
+§4-§6.
 
 ## 3. Known limitations to carry into the write-up
 
-- **`person` is name-based, not TMDB-id-based** — no person id survived
+- **`dim_person` is name-based, not TMDB-id-based** — no person id survived
   cleaning, so two different real people sharing a name would incorrectly
-  collapse into one `person` row. A known gap, not something to fix in
+  collapse into one `dim_person` row. A known gap, not something to fix in
   Phase 2 unless re-enriching with TMDB person ids.
 - **Financial coverage is ~19.6%** (8,900 of 45,433 movies have both budget
   and revenue) and skews toward mainstream titles — shown only as secondary,
@@ -156,17 +183,29 @@ time allows.
   this root-cause fix. The `~ '^[A-Za-z]{2}$'`/`~ '^[a-z]{2}$'` guards in
   `int_movie_countries`/`int_movie_languages`/`dim_language` are kept as a
   defensive check, but no longer filter out anything.
-- **`dim_country`/`dim_language` pick their display name with
-  `mode() within group (...)`, not `min()`** — deliberately: with `min()`,
-  a single noisy/mismatched row (see above) can beat the overwhelmingly
-  common correct name purely by string sort order (e.g. `ar` briefly
-  resolved to `Français` instead of `العربية` because a French name
-  happened to sort first, even though 361 movies correctly paired `ar`
-  with `العربية` and only 1 didn't). `mode()` picks whichever name most
-  movies actually agree on. Very rare codes (a handful of total
-  occurrences catalog-wide) can still resolve to an arbitrary tied name
-  when the underlying data is itself too thin/noisy to have a real
-  majority — an inherent data limitation, not an aggregation bug.
+- **`dim_country` picks its display name with `mode() within group (...)`,
+  not `min()`** — deliberately: with `min()`, a single noisy/mismatched row
+  (see above) can beat the overwhelmingly common correct name purely by
+  string sort order (e.g. `ar` briefly resolved to `Français` instead of
+  `العربية` because a French name happened to sort first, even though 361
+  movies correctly paired `ar` with `العربية` and only 1 didn't). `mode()`
+  picks whichever name most movies actually agree on. Very rare codes (a
+  handful of total occurrences catalog-wide) can still resolve to an
+  arbitrary tied name when the underlying data is itself too
+  thin/noisy to have a real majority — an inherent data limitation, not an
+  aggregation bug.
+- **`dim_language` no longer derives its display name from TMDB's
+  spoken_language_names at all** — it looks up the ISO 639-1 standard
+  English name from the `iso_639_1` seed instead (`cn`/`xx` are named
+  explicitly, since they're TMDB conventions, not real ISO 639-1 codes).
+  19 of the 140 codes in this catalog have no native-language name
+  anywhere in the pipeline: TMDB's own raw export leaves `name` blank for
+  them even at the source (e.g. `to`: `[{'iso_639_1': 'to', 'name': ''}]`
+  in `data/raw/movie_extended.csv`), so `mode()`-style voting over the
+  per-movie pairings could never have recovered a value for those rows —
+  there was nothing to vote on. Sourcing every code's name from one
+  external reference keeps the column consistent rather than mixing
+  TMDB's native-script names with an English fallback for just the gaps.
 - **Comma-joined multi-valued columns can't distinguish an embedded comma
   in a single name from a delimiter between two names** (e.g. a
   production company literally named "X, Y & Z Productions" would
@@ -194,22 +233,22 @@ time allows.
 
 ## 5. Power BI model notes
 
-**Role-playing dimension (`language`)** — it's related to `movies` two
-different ways: directly via `original_language_code` (single-valued,
-"market" axis) and indirectly via the `movie_language` bridge
-(multi-valued, "reach" signal). Power BI only allows one active relationship
-between two tables, so import `language` **twice**: once as
-`dim_original_language` (active relationship to `movies`), once as
-`dim_spoken_language` (relationship to the `movie_language` bridge). Keeps
-the underlying normalized ERD untouched — the duplication is Power
-BI-side only.
+**Role-playing dimension (`dim_language`)** — it's related to
+`fct_movie_performance` two different ways: directly via
+`original_language_code` (single-valued, "market" axis) and indirectly via
+the `movie_language` bridge (multi-valued, "reach" signal). Power BI only
+allows one active relationship between two tables, so import `dim_language`
+**twice**: once as `dim_original_language` (active relationship to
+`fct_movie_performance`), once as `dim_spoken_language` (relationship to
+the `movie_language` bridge). Keeps the underlying normalized ERD
+untouched — the duplication is Power BI-side only.
 
 **Many-to-many bridges** (`movie_genre`, `movie_country`,
 `movie_language`↔`dim_spoken_language`, `movie_cast`, `movie_director`) —
 set cross-filter direction to **Both** on these relationships, or slicers
 on genre/country/language/person won't propagate to the fact table. Not
-needed on `movies` ↔ `dim_original_language`, which is a normal
-single-direction 1-to-many.
+needed on `fct_movie_performance` ↔ `dim_original_language`, which is a
+normal single-direction 1-to-many.
 
 ## 6. Slicers/filters
 

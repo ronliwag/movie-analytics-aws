@@ -1,6 +1,3 @@
--- Splits stg_movie_extended.production_companies (comma-packed) into one
--- row per (movie_id, company_name). Grain: movie x company.
-
 with extended as (
 
     select movie_id, production_companies

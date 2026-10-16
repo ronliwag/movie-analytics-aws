@@ -1,6 +1,3 @@
--- Splits stg_movie_extended.cast_members (comma-packed) into one row per
--- (movie_id, person_name). Grain: movie x cast member.
-
 with extended as (
 
     select movie_id, cast_members
