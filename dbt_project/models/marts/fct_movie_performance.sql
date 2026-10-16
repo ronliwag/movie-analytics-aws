@@ -1,10 +1,5 @@
 -- Final, wide, analytics-ready table. This is what Power BI reads.
+-- All the business logic (reach counts) lives in int_movies_joined.sql --
+-- this stays a plain final `select *` per docs/DATA_MODEL.md section 2.
 
-with movies as (
-    select * from {{ ref('int_movies_joined') }}
-)
-
--- TODO: add profit, rating rollups, genre/country breakouts — whatever
--- Power BI's dashboard needs as pre-aggregated columns.
-select *
-from movies
+select * from {{ ref('int_movies_joined') }}

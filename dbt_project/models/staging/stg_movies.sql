@@ -1,4 +1,3 @@
--- Light renaming/casting only. No joins or business logic here.
 
 with source as (
 
@@ -7,11 +6,7 @@ with source as (
 )
 
 select
-    -- TODO: rename/cast raw columns, e.g.
-    -- movie_id as movie_id,
-    -- title as title,
-    -- release_date as release_date,
-    -- budget as budget,
-    -- revenue as revenue
-    *
+    id::integer as movie_id,
+    title,
+    release_date::date as release_date
 from source

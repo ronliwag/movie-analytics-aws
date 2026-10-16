@@ -2,9 +2,342 @@ version: 2
 
 models:
   - name: fct_movie_performance
-    description: Analytics-ready fact table consumed directly by the Power BI dashboard.
+    description: >
+      Analytics-ready fact table consumed directly by the Power BI
+      dashboard. One row per movie_id. Weighted avg rating, reach index,
+      quality/reach percentile, Distribution Gap Score, and the
+      ratings-volume confidence flag are Power BI DAX measures computed
+      from these columns, not columns here -- see docs/DATA_MODEL.md
+      sections 4 and 6.
     columns:
       - name: movie_id
+        description: Primary key. Grain of this table -- one row per movie.
         tests:
           - unique
           - not_null
+      - name: title
+        description: Movie title.
+      - name: original_title
+        description: Movie title in its original (non-translated) form.
+      - name: original_language_code
+        description: ISO 639-1 code of the movie's original spoken language. FK to dim_language.iso_639_1_code.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_language')
+                field: iso_639_1_code
+      - name: release_date
+        description: Theatrical release date.
+      - name: avg_rating
+        description: Mean user rating for the movie. Null for the ~2,266 movies with no rating data.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0.5
+                max_value: 5.0
+                inclusive: true
+      - name: total_ratings
+        description: Count of individual ratings behind avg_rating -- confidence/volume signal.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+      - name: std_dev
+        description: Standard deviation of individual ratings -- lower means more consistent reception.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: last_rated
+        description: Timestamp of the most recent rating included in the summary.
+      - name: reach_country_count
+        description: Distinct production countries for this movie.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: reach_language_count
+        description: Distinct spoken languages for this movie.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+
+  - name: dim_genre
+    description: "{{ doc('dim_genre') }}"
+    columns:
+      - name: genre_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) genre name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Genre display name.
+        tests:
+          - not_null
+
+  - name: dim_production_company
+    description: "{{ doc('dim_production_company') }}"
+    columns:
+      - name: production_company_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) company name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Production company display name.
+        tests:
+          - not_null
+
+  - name: dim_country
+    description: "{{ doc('dim_country') }}"
+    columns:
+      - name: iso_3166_1_code
+        description: ISO 3166-1 country code. Natural primary key.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Country display name. Null for the small number of rows with a code but no matching name in the source (see docs/DATA_MODEL.md known limitations).
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "iso_3166_1_code ~ '^[A-Za-z]{2}$'"
+
+  - name: dim_language
+    description: "{{ doc('dim_language') }}"
+    columns:
+      - name: iso_639_1_code
+        description: ISO 639-1 language code. Natural primary key.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Language display name, from the iso_639_1 seed (or a TMDB-specific override for cn/xx, which aren't real ISO 639-1 codes).
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "iso_639_1_code ~ '^[a-z]{2}$' or iso_639_1_code in ('cn', 'xx')"
+
+  - name: dim_person
+    description: "{{ doc('dim_person') }}"
+    columns:
+      - name: person_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) person name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Person display name.
+        tests:
+          - not_null
+      - name: filmography_count
+        description: Distinct movies this person is linked to as director and/or cast (global, not market-scoped -- see docs/DATA_MODEL.md).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+      - name: earliest_release_date
+        description: Earliest release_date across this person's linked movies. Null if none of them have one.
+      - name: latest_release_date
+        description: Latest release_date across this person's linked movies. Null if none of them have one.
+      - name: career_span_years
+        description: Whole years between earliest_release_date and latest_release_date. Null if either is null.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: possible_name_collision
+        description: >
+          True when career_span_years > 60 -- heuristic flag that this
+          person_id may collapse two different real people sharing a name.
+          Surface this before recommending a market-scoped director/cast
+          pick to a negotiator. See docs/DATA_MODEL.md known limitations.
+
+  - name: movie_genre
+    description: Bridge, grain one row per (movie_id, genre_id).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: genre_id
+        description: FK to dim_genre.genre_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_genre')
+                field: genre_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - genre_id
+
+  - name: movie_company
+    description: Bridge, grain one row per (movie_id, production_company_id).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: production_company_id
+        description: FK to dim_production_company.production_company_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_production_company')
+                field: production_company_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - production_company_id
+
+  - name: movie_country
+    description: Bridge, grain one row per (movie_id, iso_3166_1_code).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: iso_3166_1_code
+        description: FK to dim_country.iso_3166_1_code. A movie's production country -- reach signal, secondary origin view.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_country')
+                field: iso_3166_1_code
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - iso_3166_1_code
+
+  - name: movie_language
+    description: Bridge, grain one row per (movie_id, iso_639_1_code).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: iso_639_1_code
+        description: FK to dim_language.iso_639_1_code. A movie's spoken language -- reach signal, distinct from the single original_language_code on fct_movie_performance.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_language')
+                field: iso_639_1_code
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - iso_639_1_code
+
+  - name: movie_director
+    description: Bridge, grain one row per (movie_id, person_id).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: person_id
+        description: FK to dim_person.person_id, in this table's director role. The same person_id can also appear in movie_cast if that person acted somewhere too -- dim_person doesn't distinguish roles.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_person')
+                field: person_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - person_id
+
+  - name: movie_cast
+    description: Bridge, grain one row per (movie_id, person_id).
+    columns:
+      - name: movie_id
+        description: FK to fct_movie_performance.movie_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_movie_performance')
+                field: movie_id
+      - name: person_id
+        description: FK to dim_person.person_id, in this table's cast role. The same person_id can also appear in movie_director if that person directed somewhere too -- dim_person doesn't distinguish roles.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_person')
+                field: person_id
+      - name: billing_order
+        description: >
+          TMDB cast billing position (1 = top-billed), proxied via list
+          position from the enrichment pass -- see int_movie_cast's doc
+          block and docs/DATA_MODEL.md known limitations. Lower is more
+          prominent; usually caps at 10 (background/ensemble credits
+          beyond the top 10 aren't captured at all), occasionally 11 due
+          to the embedded-comma splitting limitation (see
+          int_movie_cast.billing_order).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 11
+                inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - person_id
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - billing_order

@@ -46,10 +46,19 @@ Three separate, standalone scripts:
 See `RESULTS.md` for the actual before/after numbers from the last full run
 of all three.
 
-**All three are deliberately outside the ingestion/cleaning pipeline.**
+- **`generate_iso_639_1_seed.py`** (no API, no network) — generates
+  `dbt_project/seeds/iso_639_1.csv`, the ISO 639-1 code -> English name
+  reference table `dim_language.sql` joins against. Source is `pycountry`
+  (bundled `iso-codes` data), not a live call. Unlike the three scripts
+  above, its output has no dependency on this project's movie data at
+  all -- it's a static reference table, not a backfill, so there's nothing
+  to re-run it against.
+
+**All four are deliberately outside the ingestion/cleaning pipeline.**
 Run them once, manually, *before* `scripts/pyspark/transform.py` or
-`scripts/pandas/clean_data.py`. None of those import from here or call
-this automatically.
+`scripts/pandas/clean_data.py` (except `generate_iso_639_1_seed.py`, which
+has no ordering dependency on anything -- see its own docstring). None of
+those import from here or call this automatically.
 
 Run `fill_missing.py` before `validate_records.py`: besides the ordering
 requirement above (`validate_records.py` needs `fill_missing.py`'s output
@@ -99,6 +108,10 @@ python -m scripts.enrichment.validate_records --limit 50
 # from https://grouplens.org/datasets/movielens/ and unzip to
 # data/external/movielens/ (needs links.csv and ratings.csv). No API key.
 python -m scripts.enrichment.movielens_ratings
+
+# No API key, no network -- regenerates dbt_project/seeds/iso_639_1.csv
+# from pycountry. Only needs re-running if the seed's wording should change.
+python -m scripts.enrichment.generate_iso_639_1_seed
 ```
 
 `fill_missing`/`validate_records` need `TMDB_API_KEY` (see `.env.example`)

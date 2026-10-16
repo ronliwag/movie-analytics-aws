@@ -2,9 +2,163 @@ version: 2
 
 models:
   - name: int_movies_joined
-    description: Movies joined to their ratings and extended metadata.
+    description: "{{ doc('int_movies_joined') }}"
     columns:
       - name: movie_id
+        description: Primary key, carried through from stg_movies.movie_id.
         tests:
           - unique
           - not_null
+      - name: original_title
+        description: Movie title in its original (non-translated) form.
+      - name: original_language_code
+        description: ISO 639-1 code of the movie's original spoken language. FK to dim_language.iso_639_1_code.
+      - name: reach_country_count
+        description: Distinct production countries for this movie (from int_movie_countries). 0, not null, when there are none.
+      - name: reach_language_count
+        description: Distinct spoken languages for this movie (from int_movie_languages). 0, not null, when there are none.
+
+  - name: int_movie_genres
+    description: One row per (movie_id, genre_name), split from stg_movie_extended.genres.
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as genres.
+        tests:
+          - not_null
+      - name: genre_name
+        description: >
+          One genre name from the comma-split genres list. Feeds dim_genre
+          (deduped, surrogate-keyed) and movie_genre (this exact
+          movie_id/genre_name pair, re-hashed to genre_id).
+
+  - name: int_movie_companies
+    description: One row per (movie_id, company_name), split from stg_movie_extended.production_companies.
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as production companies.
+        tests:
+          - not_null
+      - name: company_name
+        description: >
+          One production company name from the comma-split
+          production_companies list. Feeds dim_production_company and
+          movie_company the same way int_movie_genres.genre_name feeds
+          dim_genre/movie_genre.
+
+  - name: int_movie_countries
+    description: "{{ doc('int_movie_countries') }}"
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as production countries (co-productions are genuinely multi-valued).
+        tests:
+          - not_null
+      - name: country_code
+        description: ISO 3166-1 country code, position-zipped from production_country_codes. Feeds dim_country.iso_3166_1_code and movie_country.
+      - name: country_name
+        description: >
+          Country display name, position-zipped from
+          production_country_names. Null wherever the zip's trailing-pad
+          behavior catches a code with no matching name (see
+          docs/DATA_MODEL.md known limitations) -- dim_country's mode()
+          aggregation resolves the display name across all occurrences of a
+          code, so a null here doesn't necessarily mean a null in dim_country.
+
+  - name: int_movie_languages
+    description: "{{ doc('int_movie_languages') }}"
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as spoken languages.
+        tests:
+          - not_null
+      - name: language_code
+        description: ISO 639-1 language code, position-zipped from spoken_language_codes. Feeds movie_language directly; dim_language's name for this code comes from the iso_639_1 seed, not this column.
+      - name: language_name
+        description: >
+          TMDB's own spoken-language name for this code, position-zipped
+          from spoken_language_names. Not used by dim_language anymore (see
+          docs/DATA_MODEL.md known limitations) -- kept here as the raw
+          per-movie value, often blank even at the TMDB source for
+          less-common languages.
+
+  - name: int_movie_directors
+    description: One row per (movie_id, person_name), split from stg_movie_extended.director.
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as credited directors (usually one).
+        tests:
+          - not_null
+      - name: person_name
+        description: >
+          One director name from the comma-split director list. Feeds
+          dim_person (deduped, surrogate-keyed, shared with
+          int_movie_cast.person_name) and movie_director.
+
+  - name: int_movie_cast
+    description: "{{ doc('int_movie_cast') }}"
+    columns:
+      - name: movie_id
+        description: FK to stg_movies.movie_id. Not unique here -- a movie has as many rows as credited cast members.
+        tests:
+          - not_null
+      - name: person_name
+        description: >
+          One cast member name from the comma-split cast_members list.
+          Feeds dim_person (deduped, surrogate-keyed, shared with
+          int_movie_directors.person_name) and movie_cast.
+      - name: billing_order
+        description: >
+          1-indexed position in the comma-split cast_members list, which is
+          TMDB's own cast `order` field (see model description). Feeds
+          movie_cast.billing_order. Usually caps at 10 (the enrichment
+          pass's top-10 slice), but 80 rows across 80 movies reach 11 --
+          an embedded comma in one of the 10 real names (e.g. a "Last,
+          Jr." suffix) splits into an extra token, inflating the apparent
+          count by one. Same root cause as the production_companies/
+          genres comma-splitting limitation in docs/DATA_MODEL.md, not a
+          sign of an 11th credited person.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                max_value: 11
+                inclusive: true
+
+  - name: int_person_filmography
+    description: "{{ doc('int_person_filmography') }}"
+    columns:
+      - name: person_id
+        description: Surrogate key, hashed the same way as dim_person.sql -- grain of this model, one row per person.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Person display name.
+        tests:
+          - not_null
+      - name: filmography_count
+        description: Distinct movies this person is linked to as director and/or cast.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
+                inclusive: true
+      - name: earliest_release_date
+        description: Earliest release_date across this person's linked movies. Null if none of them have one.
+      - name: latest_release_date
+        description: Latest release_date across this person's linked movies. Null if none of them have one.
+      - name: career_span_years
+        description: Whole years between earliest_release_date and latest_release_date. Null if either is null.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: possible_name_collision
+        description: >
+          True when career_span_years > 60 -- a heuristic flag that this
+          person_id may actually be two different real people sharing a
+          name (see model description and docs/DATA_MODEL.md known
+          limitations). Null, not true, when career_span_years itself is
+          null.

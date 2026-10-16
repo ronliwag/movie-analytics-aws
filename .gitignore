@@ -23,6 +23,7 @@ scripts/pyspark/jars/
 dbt_project/target/
 dbt_project/dbt_packages/
 dbt_project/logs/
+logs/dbt.log
 
 # Airflow (local Docker Compose runtime)
 airflow/logs/

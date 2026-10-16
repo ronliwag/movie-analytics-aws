@@ -1,6 +1,3 @@
--- TODO: unnest the multi-valued genre/production-company/country columns
--- into a tidy one-row-per-(movie_id, genre) shape (or split into separate
--- staging models per entity — your call, document the choice).
 
 with source as (
 
@@ -8,5 +5,16 @@ with source as (
 
 )
 
-select *
+select
+    id::integer as movie_id,
+    original_title,
+    original_language as original_language_code,
+    director,
+    "cast" as cast_members,
+    genres,
+    production_companies,
+    production_country_codes,
+    production_country_names,
+    spoken_language_codes,
+    spoken_language_names
 from source
