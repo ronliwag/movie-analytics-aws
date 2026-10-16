@@ -17,11 +17,6 @@ extended as (
 
 ),
 
--- Sourced from the intermediate exploder models, not the marts bridge
--- tables (movie_country/movie_language) -- an intermediate model ref()ing
--- a marts model would invert the staging -> intermediate -> marts
--- dependency direction. int_movie_countries/int_movie_languages already
--- hold the same cleaned, deduped-per-movie pairs the bridges expose.
 country_reach as (
 
     select movie_id, count(distinct country_code) as reach_country_count
@@ -44,13 +39,6 @@ select
     extended.original_title,
     extended.original_language_code,
     movies.release_date,
-    movies.budget,
-    movies.revenue,
-    -- Never imputed -- null unless both budget and revenue are disclosed.
-    case
-        when movies.budget is not null and movies.revenue is not null
-        then movies.revenue - movies.budget
-    end as profit,
     ratings.avg_rating,
     ratings.total_ratings,
     ratings.std_dev,

@@ -24,9 +24,6 @@ PostgreSQL or read from Parquet via an external/staged source).
   `docs/DATA_MODEL.md` (e.g. `movie_genre`, `movie_country`).
 - Primary key is always `movie_id` (staging renames the source `id` column
   on first contact).
-- Money columns (`budget`, `revenue`) are cast to `numeric(15,2)` in
-  staging, matching the `DECIMAL(15,2)` convention from
-  `scripts/sql/schema.sql`.
 - Staging models use an explicit column list, never `select *` — self
   documenting, and guards against silent schema drift from the `clean.*`
   source tables.

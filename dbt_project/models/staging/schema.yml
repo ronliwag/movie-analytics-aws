@@ -13,20 +13,6 @@ models:
         description: Movie title.
       - name: release_date
         description: Theatrical release date, cast to date.
-      - name: budget
-        description: Disclosed production budget in USD, cast to numeric(15,2). Null where undisclosed.
-        tests:
-          - dbt_utils.accepted_range:
-              arguments:
-                min_value: 0
-                inclusive: true
-      - name: revenue
-        description: Disclosed box-office revenue in USD, cast to numeric(15,2). Null where undisclosed.
-        tests:
-          - dbt_utils.accepted_range:
-              arguments:
-                min_value: 0
-                inclusive: true
 
   - name: stg_ratings
     description: One row per movie_id, lightly cleaned from the `clean.ratings` source.

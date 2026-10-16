@@ -28,6 +28,14 @@ movie_extended_clean.csv: id, genres, production_companies, original_title,
 ratings_clean.csv:       movie_id, last_rated, avg_rating, total_ratings, std_dev
 ```
 
+`movies_main_clean.budget`/`.revenue` are listed above because they're
+still physically present in the cleaned source CSV -- Phase 1 cleaning
+didn't change. They're just no longer mapped into the target schema (see
+§1) -- dropped from the business angle entirely (see
+[BUSINESS_ANGLE.md](BUSINESS_ANGLE.md)) because only ~19.6% of the catalog
+discloses both, skewed toward mainstream titles, working against this
+project's "hidden markets" thesis rather than supporting it.
+
 ## 1. Source → target mapping
 
 Some cells in the cleaned CSVs pack multiple values into one comma-joined
@@ -41,14 +49,15 @@ map straight across with no splitting.
 
 | Cleaned source column | Target (as built) | Needs splitting? |
 |---|---|---|
-| `movies_main_clean.id/title/release_date/budget/revenue` | `fct_movie_performance` (via `stg_movies` → `int_movies_joined`) | No |
+| `movies_main_clean.id/title/release_date` | `fct_movie_performance` (via `stg_movies` → `int_movies_joined`) | No |
+| `movies_main_clean.budget/revenue` | **Not mapped** -- dropped from the business angle (see note above) | No |
 | `movie_extended_clean.original_title/original_language` | `fct_movie_performance.original_title`, `.original_language_code` (FK to `dim_language`) | No |
 | `movie_extended_clean.genres` | `dim_genre` + `movie_genre` (via `int_movie_genres`) | Yes — comma list |
 | `movie_extended_clean.production_companies` | `dim_production_company` + `movie_company` (via `int_movie_companies`) | Yes — comma list |
 | `movie_extended_clean.production_country_codes` + `_names` | `dim_country` + `movie_country` (via `int_movie_countries`) | Yes — two parallel comma lists, zipped position-by-position |
 | `movie_extended_clean.spoken_language_codes` + `_names` | `dim_language` + `movie_language` (via `int_movie_languages`) | Yes — same zip pattern; `dim_language.name` also draws on the `iso_639_1` seed, not just this column (see §3) |
-| `movie_extended_clean.director` | `dim_person` + `movie_director` (via `int_movie_directors`) | Yes (usually 1 value, same split logic) |
-| `movie_extended_clean.cast` | `dim_person` + `movie_cast` (via `int_movie_cast`) | Yes — comma list |
+| `movie_extended_clean.director` | `dim_person` (via `int_movie_directors` → `int_person_filmography`) + `movie_director` (via `int_movie_directors`) | Yes (usually 1 value, same split logic) |
+| `movie_extended_clean.cast` | `dim_person` (via `int_movie_cast` → `int_person_filmography`) + `movie_cast` (via `int_movie_cast`, `WITH ORDINALITY` also captures `billing_order`) | Yes — comma list |
 | `ratings_clean.*` | `fct_movie_performance` (via `stg_ratings` → `int_movies_joined`) | No — already 1 row per `movie_id` |
 
 ### Worked example — one real movie, id `461257` ("Queerama")
@@ -73,7 +82,7 @@ Becomes, after mapping:
 - `movie_country`: 1 row — `production_country_codes="GB"` paired with `production_country_names="United Kingdom"` at the same list position, pointing at `dim_country`
 - `movie_language`: 1 row — `en` / `English`, same pairing logic, pointing at `dim_language` (whose display name for `en` actually comes from the `iso_639_1` seed, not this row's `English` — see §3)
 - `movie_director`: 1 row — `Daisy Asquith`, pointing at `dim_person`
-- `movie_cast`: **2 rows** — `Leigh Bowery` and `Quentin Crisp`, both pointing at `dim_person`
+- `movie_cast`: **2 rows** — `Leigh Bowery` and `Quentin Crisp`, both pointing at `dim_person`, each carrying its `billing_order` (1 and 2 — position in the comma list)
 
 One movie's 3 wide source rows explode into 1 fact row + 2 + 1 + 1 + 1 + 1 + 2
 = 8 bridge/dimension-linking rows. Multiply across all ~45,000 movies —
@@ -89,15 +98,18 @@ movie.
 ```
 fct_movie_performance
   movie_id PK, title, original_title, original_language_code FK,
-  release_date, budget, revenue, profit (computed),
+  release_date,
   avg_rating, total_ratings, std_dev, last_rated,
   reach_country_count (computed), reach_language_count (computed)
 ```
 
-`profit` and the two `reach_*_count` columns are business logic, computed in
+The two `reach_*_count` columns are business logic, computed in
 `int_movies_joined.sql` (per that model's own header comment: "business
 logic... belongs here, not in staging or in the mart") —
 `fct_movie_performance.sql` is a plain final `select *` on top of it.
+`budget`/`revenue`/`profit` used to live here too -- dropped along with
+the financial-sanity-check use case (see
+[BUSINESS_ANGLE.md](BUSINESS_ANGLE.md)).
 
 **Dimensions**
 
@@ -106,8 +118,18 @@ dim_language            (iso_639_1_code PK, name)   -- one table, reused for bot
 dim_country             (iso_3166_1_code PK, name)
 dim_genre               (genre_id PK, name)
 dim_production_company  (production_company_id PK, name)
-dim_person              (person_id PK, name)
+dim_person              (person_id PK, name,
+                          filmography_count, earliest_release_date,
+                          latest_release_date, career_span_years,
+                          possible_name_collision (computed))
 ```
+
+`dim_person`'s talent-layer columns are computed in
+`int_person_filmography.sql` the same way `int_movies_joined.sql` computes
+`fct_movie_performance`'s reach counts -- `dim_person.sql` is a plain
+final `select *` on top of it. `possible_name_collision` flags
+`career_span_years > 60` as a heuristic identity-risk mitigation for the
+name-based `person_id` below (§3).
 
 `dim_genre`/`dim_production_company`/`dim_person` key off a surrogate
 `{{ dbt_utils.generate_surrogate_key(...) }}` hash of the normalized
@@ -130,8 +152,13 @@ movie_country    (movie_id PFK, iso_3166_1_code PFK)  -- reach signal, secondary
 movie_genre      (movie_id PFK, genre_id PFK)
 movie_company    (movie_id PFK, production_company_id PFK)
 movie_director   (movie_id PFK, person_id PFK)
-movie_cast       (movie_id PFK, person_id PFK)
+movie_cast       (movie_id PFK, person_id PFK, billing_order)
 ```
+
+`movie_cast.billing_order` is TMDB's own cast `order` field, proxied via
+position in `int_movie_cast`'s comma-split (see §3) -- lower is more
+prominent, used to weight lead-billed cast over background credits in the
+talent-layer measures (§4).
 
 `dim_language` stays **one** table at the dbt/SQL level. The role-playing
 split (original vs. spoken) only happens later, at Power BI import (§4).
@@ -152,9 +179,38 @@ Phase 3 if a pre-aggregated market-grain table would simplify the DAX in
   cleaning, so two different real people sharing a name would incorrectly
   collapse into one `dim_person` row. A known gap, not something to fix in
   Phase 2 unless re-enriching with TMDB person ids.
-- **Financial coverage is ~19.6%** (8,900 of 45,433 movies have both budget
-  and revenue) and skews toward mainstream titles — shown only as secondary,
-  opportunistic context in the dashboard, never as a ranking requirement.
+  `dim_person.possible_name_collision` (flags a 60+ year credited career
+  span, computed in `int_person_filmography.sql`) is a heuristic mitigation
+  surfaced on the talent shortlist, not a fix — verified against real data
+  to catch this failure mode (e.g. "Georges Méliès," whose linked films
+  span 1896–2011, almost certainly the 1900s film pioneer merged with a
+  modern namesake), but it can't catch a collision between two people
+  active in the same era. 421 of 164,955 people are currently flagged.
+- **`movie_cast.billing_order` is a positional proxy for TMDB's cast
+  `order` field, not the integer itself** (never persisted anywhere in the
+  pipeline). `director`/`cast` didn't exist in the raw source at all --
+  both are new columns added wholesale by
+  `scripts/enrichment/fill_missing.py`, which sorts `credits["cast"]` by
+  TMDB's own `order` before comma-joining
+  (`sorted(credits["cast"], key=lambda c: c.get("order", 999))[:10]`), so
+  there's no non-enriched cast population where position could have
+  drifted from the real order -- the proxy is reliable across the whole
+  populated cast, not just a backfilled subset. It's capped at the top 10
+  credited names per movie (someone absent from `movie_cast` may simply be
+  outside the top 10, not unbilled), and it's a proxy for role prominence,
+  not screen time or impact -- a contractual/studio billing decision that
+  correlates with but isn't identical to either. 80 movies show an 11th
+  position, caused by an embedded comma inside one of the 10 real names
+  (e.g. a "Last, Jr." suffix) splitting into an extra token -- the same
+  comma-ambiguity limitation as `production_companies`/`genres` below, not
+  an 11th real credited person.
+- **Financial data (budget/revenue/profit) is dropped from the schema
+  entirely**, not just deprioritized — only ~19.6% of the catalog (8,900
+  of 45,433 movies) discloses both, skewed toward mainstream titles, which
+  worked against rather than for the "hidden markets" thesis (see
+  [BUSINESS_ANGLE.md](BUSINESS_ANGLE.md)). Still present in the cleaned
+  source CSV and in `clean.movies_main` if a future angle needs it back --
+  just not mapped past `stg_movies` anymore.
 - **`production_country` is genuinely multi-valued** (co-productions) —
   used as a secondary origin view, not the primary market grain.
 - **Country/language code↔name pairing relies on a positional zip**
@@ -227,9 +283,13 @@ Phase 3 if a pre-aggregated market-grain table would simplify the DAX in
 | Title Reach Count | `fct_movie_performance`, movie grain | `COUNTROWS(RELATEDTABLE(movie_country)) + COUNTROWS(RELATEDTABLE(movie_language))` |
 | Confidence Flag | movie grain | Flags titles below the ratings-volume threshold as "Low sample" |
 | Shortlist Rank | movie grain, within a selected market | `RANKX` filtered to the selected `original_language` |
-| Financial Coverage % | shortlist subset | `DIVIDE(COUNTROWS(FILTER(Shortlist, NOT ISBLANK(budget))), COUNTROWS(Shortlist))` |
-| Profit | movie grain | `IF(budget and revenue both present, revenue - budget, BLANK())` — never imputed |
-| Financial Contradiction Flag | shortlist subset | Flags a shortlisted title with disclosed `Profit < 0` |
+| Director/Cast Weighted Avg Rating | person grain, within a selected market | `RELATEDTABLE` over `movie_director`/`movie_cast` joined to `fct_movie_performance`, filtered to the market selected on Page 1 — same weighted-avg shape as the market-level measure, one level down |
+| Director/Cast Rating Consistency | same | `AVERAGE(std_dev)` over the person's market-linked films — risk filter, same role as the market-level `std_dev` measure |
+| Filmography Count (market-scoped) | same | `COUNTROWS(RELATEDTABLE(...))` filtered to the selected market — not a hard floor (see below) |
+| Talent Confidence Flag | person grain, within a selected market | Reuses the `Confidence Flag` pattern above, keyed off Filmography Count instead of `total_ratings` — flags low-sample people instead of excluding them, so an emerging/crossover talent with few market-linked films still surfaces, just visibly flagged |
+| Cast Billing Weight | movie_cast grain | `1 / billing_order` (or an equivalent inverse), weights lead-billed cast above background credits in any cast-level aggregate |
+| Recency/Activity Flag | person grain | Flags "Inactive" when `latest_release_date` is more than N years before today — deprioritizes retired/inactive people from a "pursue" recommendation |
+| Name Collision Flag | person grain | Directly from `dim_person.possible_name_collision` — surfaced as a visible warning on the talent shortlist, not filtered out silently |
 
 ## 5. Power BI model notes
 
@@ -260,7 +320,10 @@ normal single-direction 1-to-many.
 | Page 2 (Shortlist) | Market/language | carried from Page 1, or standalone `dim_original_language` slicer |
 | Page 2 | Confidence flag (Reliable / Low sample) | `Confidence Flag` measure |
 | Page 2 | Reach count range | `Title Reach Count` measure |
-| Page 3 (Financial) | (inherits Page 1/2 selections) | — |
+| Page 3 (Talent) | Market (inherits Page 1/2 selections) | carried, or standalone `dim_original_language` slicer |
+| Page 3 | Talent Confidence Flag (Reliable / Low sample) | `Talent Confidence Flag` measure |
+| Page 3 | Recency/Activity Flag | `Recency/Activity Flag` measure |
+| Page 3 | Name Collision warning (visible, not a filter) | `Name Collision Flag` measure |
 
 **Confidence threshold as a live slicer**, not a hardcoded number — add a
 disconnected parameter table (`MinRatingsThreshold`, e.g. 0–5000 step 100):
@@ -295,13 +358,13 @@ Same swap applies to `Reach Percentile`, and therefore to
 
 Narrative spine: *"We're scouting on gut feel → here's where audience-validated
 quality is outpacing distribution reach → here are the actual titles to call
-about → here's the financial gut-check before anyone signs."*
+about → here are the specific people worth pursuing once we act on a market."*
 
 ### Page 0 — Executive Summary
 - **Audience:** Head of Global Content Acquisition, first 15 seconds.
-- **Shows:** catalog-wide framing (95% ratings coverage, 19.6% financial
-  coverage) + a single headline finding: "Top 5 underexposed markets" as a
-  callout, not a chart.
+- **Shows:** catalog-wide framing (95% ratings coverage, 98.6%/96.6%
+  director/cast coverage) + a single headline finding: "Top 5 underexposed
+  markets" as a callout, not a chart.
 - **Recommended-action callout:** *"These 5 origin-language markets combine
   top-quartile audience quality with bottom-quartile international
   footprint — prioritize scouting trips here next cycle."*
@@ -327,13 +390,16 @@ about → here's the financial gut-check before anyone signs."*
   quality-and-confidence bar with reach in the bottom 3 countries —
   shortlist for licensing outreach this quarter."*
 
-### Page 3 — Financial Sanity Check (Use Case 3)
-- **Audience:** Finance / greenlight committee.
-- **Shows:** only the disclosed-financials subset of the shortlist, framed
-  explicitly as supporting, not qualifying, evidence.
-- **Visuals:** coverage banner ("X of Y shortlisted titles have disclosed
-  financials"); budget-vs-revenue scatter for the disclosed subset only;
-  contradiction callout if any shortlisted title shows a disclosed loss.
-- **Recommended-action callout:** *"No financial red flags among disclosed
-  titles — proceed on the ratings-driven shortlist."* (or a named
-  exception, if one exists)
+### Page 3 — Talent Scouting Layer (Use Case 3)
+- **Audience:** Acquisitions/casting negotiators — the deal-making page.
+- **Shows:** drills from a market selected on Page 1 down to directors/cast
+  linked to that market's titles, ranked by weighted avg rating and
+  consistency, weighted toward lead billing.
+- **Visuals:** sortable table (name, role, market-linked filmography count,
+  weighted avg rating, consistency, latest release date); Talent
+  Confidence Flag and Recency/Activity Flag as conditional formatting;
+  Name Collision Flag surfaced as a visible warning icon, never silently
+  filtered.
+- **Recommended-action callout:** *"[N] directors/cast from this market
+  clear the quality bar with recent activity — shortlist for outreach this
+  quarter. [M] flagged for identity verification before contacting."*

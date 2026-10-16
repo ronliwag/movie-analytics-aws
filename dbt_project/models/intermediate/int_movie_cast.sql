@@ -6,9 +6,10 @@ with extended as (
 
 )
 
-select distinct
+select
     movie_id,
-    trim(person_name) as person_name
+    trim(person_name) as person_name,
+    billing_order
 from extended,
-    unnest(string_to_array(cast_members, ',')) as person_name
+    unnest(string_to_array(cast_members, ',')) with ordinality as t(person_name, billing_order)
 where trim(person_name) != ''

@@ -18,10 +18,6 @@ sources:
             description: Movie title (may be a translated release title, not necessarily original_title).
           - name: release_date
             description: Theatrical release date.
-          - name: budget
-            description: Disclosed production budget in USD. Null/0 where undisclosed -- cast to numeric(15,2) and nulled at 0 in staging.
-          - name: revenue
-            description: Disclosed box-office revenue in USD. Null/0 where undisclosed -- cast to numeric(15,2) and nulled at 0 in staging.
 
       - name: ratings
         description: One rating summary per movie_id (not present for every movie -- see stg_ratings). Renamed to stg_ratings, columns otherwise unchanged.
