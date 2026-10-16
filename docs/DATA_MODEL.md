@@ -130,6 +130,49 @@ time allows.
   opportunistic context in the dashboard, never as a ranking requirement.
 - **`production_country` is genuinely multi-valued** (co-productions) —
   used as a secondary origin view, not the primary market grain.
+- **Country/language code↔name pairing relies on a positional zip**
+  (`unnest(codes_arr, names_arr)`) that assumes the Nth code corresponds to
+  the Nth name. Some rows have mismatched list lengths — a TMDB data gap (a
+  code with no listed name), not a parsing bug — and a spot check found the
+  unnamed code always trailing at the end of the list, which the zip
+  resolves correctly (pads with `NULL`).
+- **FIXED — 49 movies had a CSV column-shift bug**, traced to
+  `movie_id 154399` (`production_companies` = `PRF "Zespoły Filmowe",
+  Zespół Filmowy "Syrena"`, Polish studio names with an embedded literal
+  quote). The CSVs themselves were fine (Python's `csv` module parses them
+  correctly) — the bug was in `scripts/pyspark/transform.py`'s
+  `spark.read.csv(...)` calls, which used Spark's default backslash
+  escape instead of the RFC4180 doubled-quote escaping pandas' `to_csv()`
+  writes, so any field with an embedded quote shifted every column after
+  it left by one for that row (`director` would hold a language code,
+  `cast` would hold the real director's name, etc.). Confirmed directly
+  with a standalone PySpark read: without `.option("escape", "\"")` the
+  corruption reproduces exactly; with it, every field lands correctly.
+  Fixed in `transform.py` (all four `spark.read.csv` calls) and the
+  pipeline re-run — `clean.movie_extended` is now correct for all 49
+  movies, including `movie_director`/`movie_cast`, which couldn't be
+  algorithmically cleaned at the dbt layer (a shifted-in value there is
+  still a plausible person name, no format check catches it) and needed
+  this root-cause fix. The `~ '^[A-Za-z]{2}$'`/`~ '^[a-z]{2}$'` guards in
+  `int_movie_countries`/`int_movie_languages`/`dim_language` are kept as a
+  defensive check, but no longer filter out anything.
+- **`dim_country`/`dim_language` pick their display name with
+  `mode() within group (...)`, not `min()`** — deliberately: with `min()`,
+  a single noisy/mismatched row (see above) can beat the overwhelmingly
+  common correct name purely by string sort order (e.g. `ar` briefly
+  resolved to `Français` instead of `العربية` because a French name
+  happened to sort first, even though 361 movies correctly paired `ar`
+  with `العربية` and only 1 didn't). `mode()` picks whichever name most
+  movies actually agree on. Very rare codes (a handful of total
+  occurrences catalog-wide) can still resolve to an arbitrary tied name
+  when the underlying data is itself too thin/noisy to have a real
+  majority — an inherent data limitation, not an aggregation bug.
+- **Comma-joined multi-valued columns can't distinguish an embedded comma
+  in a single name from a delimiter between two names** (e.g. a
+  production company literally named "X, Y & Z Productions" would
+  incorrectly split into two rows). Inherited from Phase 1's cleaning
+  encoding — not fixable at the dbt layer without re-fetching structured
+  data from TMDB.
 
 ## 4. Measures
 

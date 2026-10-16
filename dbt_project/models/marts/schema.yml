@@ -8,3 +8,166 @@ models:
         tests:
           - unique
           - not_null
+
+  - name: dim_genre
+    description: Deduped genre catalog.
+    columns:
+      - name: genre_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) genre name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Genre display name.
+        tests:
+          - not_null
+
+  - name: dim_production_company
+    description: Deduped production company catalog.
+    columns:
+      - name: production_company_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) company name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Production company display name.
+        tests:
+          - not_null
+
+  - name: dim_country
+    description: Deduped country catalog.
+    columns:
+      - name: iso_3166_1_code
+        description: ISO 3166-1 country code. Natural primary key.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Country display name. Null for the small number of rows with a code but no matching name in the source (see docs/DATA_MODEL.md known limitations).
+
+  - name: dim_language
+    description: >
+      Deduped language catalog. Codes come from both the spoken-language
+      bridge and every movie's original_language_code, so movies.
+      original_language_code (Task 4) resolves against this dimension too.
+    columns:
+      - name: iso_639_1_code
+        description: ISO 639-1 language code. Natural primary key.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Language display name. Null where only an original_language_code reference exists with no matching spoken-language name.
+
+  - name: dim_person
+    description: >
+      Deduped person catalog, shared by movie_director and movie_cast.
+      Name-based, not TMDB-id-based -- see docs/DATA_MODEL.md known
+      limitations.
+    columns:
+      - name: person_id
+        description: Surrogate key, hashed from the normalized (lower/trimmed) person name.
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: Person display name.
+        tests:
+          - not_null
+
+  - name: movie_genre
+    description: Bridge, grain one row per (movie_id, genre_id).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: genre_id
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - genre_id
+
+  - name: movie_company
+    description: Bridge, grain one row per (movie_id, production_company_id).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: production_company_id
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - production_company_id
+
+  - name: movie_country
+    description: Bridge, grain one row per (movie_id, iso_3166_1_code).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: iso_3166_1_code
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - iso_3166_1_code
+
+  - name: movie_language
+    description: Bridge, grain one row per (movie_id, iso_639_1_code).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: iso_639_1_code
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - iso_639_1_code
+
+  - name: movie_director
+    description: Bridge, grain one row per (movie_id, person_id).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: person_id
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - person_id
+
+  - name: movie_cast
+    description: Bridge, grain one row per (movie_id, person_id).
+    columns:
+      - name: movie_id
+        tests:
+          - not_null
+      - name: person_id
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - movie_id
+              - person_id
