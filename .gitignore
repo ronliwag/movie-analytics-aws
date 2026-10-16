@@ -3,6 +3,7 @@ data/raw/
 data/processed/
 data/enriched/
 data/external/
+logs/
 
 # Python
 .env
