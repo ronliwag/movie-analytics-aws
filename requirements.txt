@@ -1,4 +1,5 @@
 pandas>=2.2
+pyarrow>=17.0  # pandas .to_parquet() for the pandas → Spark handoff
 pyspark>=3.5
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
@@ -10,5 +11,3 @@ pycountry>=24.6  # scripts/enrichment/generate_iso_639_1_seed.py only, not the p
 
 # Airflow is NOT installed via this file — use the Docker Compose setup
 # in airflow/README.md instead (see that file for why).
-
-pyarrow>=17.0  # pandas .to_parquet() for the pandas → Spark handoff

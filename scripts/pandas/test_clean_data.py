@@ -120,3 +120,10 @@ def test_listcols_to_str_comma_joins():
     df = pd.DataFrame({"genres": [["Drama", "Crime"]], "id": [1]})
     result = _listcols_to_str(df)
     assert result.iloc[0]["genres"] == "Drama,Crime"
+
+
+def test_listcols_to_str_empty_list_is_none():
+    df = pd.DataFrame({"genres": [["Drama"], []], "id": [1, 2]})
+    result = _listcols_to_str(df)
+    assert pd.isna(result.iloc[1]["genres"])
+
