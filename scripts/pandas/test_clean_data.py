@@ -126,4 +126,3 @@ def test_listcols_to_str_empty_list_is_none():
     df = pd.DataFrame({"genres": [["Drama"], []], "id": [1, 2]})
     result = _listcols_to_str(df)
     assert pd.isna(result.iloc[1]["genres"])
-

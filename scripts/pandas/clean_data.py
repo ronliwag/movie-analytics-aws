@@ -225,7 +225,7 @@ def main():
         # Spark can't read nanosecond Parquet timestamps; store microseconds.
         df.to_parquet(path, index=False, coerce_timestamps="us", allow_truncated_timestamps=True)
         print(f"Wrote {len(df)} rows to {path}")
-        
+
     # Demonstrate the Movie class over the cleaned data.
     movie_objs = [Movie.from_dict(row) for row in movies.to_dict("records")]
     known_profit = [m.profit() for m in movie_objs if m.profit() is not None]
