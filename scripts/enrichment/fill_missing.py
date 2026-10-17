@@ -20,14 +20,11 @@ Run: python -m scripts.enrichment.fill_missing [--limit N]
 
 import argparse
 import shutil
-from pathlib import Path
 
 import pandas as pd
 
+from scripts.config import ENRICHED_DIR, RAW_DIR
 from scripts.enrichment.tmdb_client import DEFAULT_MAX_WORKERS, fetch_movies_concurrently
-
-RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
-ENRICHED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
 
 NEW_EXTENDED_COLUMNS = ["original_title", "original_language", "director", "cast"]
 

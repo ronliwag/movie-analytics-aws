@@ -24,11 +24,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from scripts.config import ENRICHED_DIR, PROCESSED_DIR
 from scripts.pandas.data_processor import apply_transform, index_by_movie_id, load_json, standardize_date
 from scripts.pandas.models import Movie, Rating
 
-SOURCE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
-PROCESSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+SOURCE_DIR = ENRICHED_DIR  # reads enrichment's output, not data/raw/
 
 
 def load_movies(raw_dir: Path = SOURCE_DIR) -> pd.DataFrame:

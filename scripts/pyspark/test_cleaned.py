@@ -9,13 +9,11 @@ Run with: pytest scripts/pyspark/test_cleaned.py -v
 """
 
 import csv
-from pathlib import Path
 
 import pytest
 
+from scripts.config import PROCESSED_DIR as REAL_PROCESSED_DIR
 from scripts.pyspark.transform import clean, get_spark
-
-REAL_PROCESSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
 
 
 @pytest.fixture(scope="session")

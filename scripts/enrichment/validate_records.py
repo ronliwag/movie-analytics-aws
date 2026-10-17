@@ -20,14 +20,12 @@ Run: python -m scripts.enrichment.validate_records [--limit N]
 
 import argparse
 import re
-from pathlib import Path
 
 import pandas as pd
 
+from scripts.config import ENRICHED_DIR
 from scripts.enrichment.tmdb_client import DEFAULT_MAX_WORKERS, fetch_movies_concurrently
 from scripts.pandas.data_processor import standardize_date
-
-ENRICHED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
 
 
 def _has_value(value) -> bool:

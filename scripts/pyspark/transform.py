@@ -24,9 +24,10 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
+from scripts.config import DATA_DIR
+
 load_dotenv()
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 SOURCE_DIR = DATA_DIR / "enriched"
 JARS_DIR = Path(__file__).resolve().parent / "jars"
 
