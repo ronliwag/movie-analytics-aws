@@ -4,7 +4,7 @@ sources:
   - name: movie_analytics_raw
     description: >
       Cleaned tables written by scripts/pyspark/transform.py's clean() step
-      (sourced from data/processed/*.csv, the pandas-cleaned output) — not
+      (sourced from the Parquet tables in data/processed/, the pandas-cleaned output) — not
       the raw schema, which holds the unstandardized data/enriched/*.csv
       load.
     schema: clean

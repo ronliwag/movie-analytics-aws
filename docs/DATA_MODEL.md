@@ -17,19 +17,19 @@ notes/storyboard below can be built directly, not re-derived.
 
 See [BUSINESS_ANGLE.md](BUSINESS_ANGLE.md) for the business angle this serves.
 
-Grounded in the actual cleaned columns:
+Grounded in the actual cleaned columns (one Parquet table per source in data/processed/, called *_clean below):
 
 ```
-movies_main_clean.csv:   id, title, release_date, budget, revenue
-movie_extended_clean.csv: id, genres, production_companies, original_title,
+movies_main_clean:   id, title, release_date, budget, revenue
+movie_extended_clean: id, genres, production_companies, original_title,
                            original_language, director, cast,
                            production_country_codes, production_country_names,
                            spoken_language_codes, spoken_language_names
-ratings_clean.csv:       movie_id, last_rated, avg_rating, total_ratings, std_dev
+ratings_clean:       movie_id, last_rated, avg_rating, total_ratings, std_dev
 ```
 
 `movies_main_clean.budget`/`.revenue` are listed above because they're
-still physically present in the cleaned source CSV -- Phase 1 cleaning
+still physically present in the cleaned source table -- Phase 1 cleaning
 didn't change. They're just no longer mapped into the target schema (see
 §1) -- dropped from the business angle entirely (see
 [BUSINESS_ANGLE.md](BUSINESS_ANGLE.md)) because only ~19.6% of the catalog
@@ -38,7 +38,7 @@ project's "hidden markets" thesis rather than supporting it.
 
 ## 1. Source → target mapping
 
-Some cells in the cleaned CSVs pack multiple values into one comma-joined
+Some cells in the cleaned tables pack multiple values into one comma-joined
 string (`genres`, `production_companies`, `director`, `cast`, and the
 country/language code+name pairs). The normalized ERD needs one row per
 value, not one cell per movie — so those columns need to be split

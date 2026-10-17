@@ -2,9 +2,9 @@
 
 Implements the rules from `notebooks/README.md`'s data quality findings
 (Task 5 input). `clean_data.py` reads the three raw sources and writes
-three CSVs mirroring them (`data/processed/movies_main_clean.csv`,
-`movie_extended_clean.csv`, `ratings_clean.csv`) -- not merged into one
-file, so `transform.py`'s `clean()` can load each straight into
+three Parquet tables mirroring them (`data/processed/movies_main/`,
+`movie_extended/`, `ratings/`, one `part-0.parquet` each) -- not merged
+into one table, so `transform.py`'s `clean()` can load each straight into
 `clean.movies_main` / `movie_extended` / `ratings` in Postgres. 
 
 ## Attribute format: raw → cleaned

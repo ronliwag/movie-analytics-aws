@@ -3,7 +3,7 @@
 Orchestrates the full pipeline end to end: pandas cleaning -> PySpark
 ingest/load -> dbt run/test -> (Power BI refresh is manual/scheduled
 separately). The DAG has 4 tasks, not 3 -- `scripts/pyspark/transform.py`'s
-`clean()` step reads `data/processed/*_clean.csv`, which only
+`clean()` step reads the Parquet tables in `data/processed/`, which only
 `scripts/pandas/clean_data.py` produces, so that has to run first. See the
 module docstring in `dags/movie_analytics_dag.py` for the full reasoning.
 `scripts/enrichment/*` stays out of the DAG -- it's a one-time/manual step,
