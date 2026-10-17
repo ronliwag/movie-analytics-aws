@@ -35,9 +35,9 @@ from pathlib import Path
 
 import pandas as pd
 
-RAW_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "raw"
-ENRICHED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
-MOVIELENS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "external" / "movielens"
+from scripts.config import ENRICHED_DIR, EXTERNAL_DIR, RAW_DIR
+
+MOVIELENS_DIR = EXTERNAL_DIR / "movielens"
 
 
 def load_links(links_path: Path) -> pd.DataFrame:

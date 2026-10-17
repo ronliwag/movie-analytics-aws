@@ -26,10 +26,12 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from scripts.config import ENRICHED_DIR
+
 load_dotenv()
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
-CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched" / "tmdb_cache"
+CACHE_DIR = ENRICHED_DIR / "tmdb_cache"
 
 # Aggregate cap across ALL worker threads combined (~20 req/sec) -- backed
 # by the 429 handling below as a safety net if this turns out to be too

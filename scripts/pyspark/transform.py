@@ -24,9 +24,10 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
+from scripts.config import DATA_DIR
+
 load_dotenv()
 
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 SOURCE_DIR = DATA_DIR / "enriched"
 JARS_DIR = Path(__file__).resolve().parent / "jars"
 
@@ -149,24 +150,22 @@ def load_ratings(spark: SparkSession) -> DataFrame:
     )
 
 
+def _read_parquet(spark: SparkSession, path: Path, schema: StructType) -> DataFrame:
+    # Picks columns by name and casts each one to the schema's type, so column
+    # order in the file doesn't matter, extra columns are dropped, and a
+    # missing column fails loudly instead of shifting the others over.
+    return spark.read.parquet(str(path)).select([F.col(f.name).cast(f.dataType) for f in schema.fields])
+
+
 def clean(spark: SparkSession, processed_dir: Path | None = None) -> dict[str, DataFrame]:
-    """Loads the already-cleaned CSVs produced by scripts/pandas/clean_data.py
-    -- one per raw source, mirroring raw.movies_main/movie_extended/ratings."""
-    
+    """Loads the already-cleaned Parquet tables produced by
+    scripts/pandas/clean_data.py -- one folder per raw source, mirroring
+    raw.movies_main/movie_extended/ratings."""
     base = processed_dir or (DATA_DIR / "processed")
-    # escape="\"" -- see load_movies()'s comment. Same RFC4180 vs. Spark-
-    # default mismatch applies to scripts/pandas/clean_data.py's to_csv()
-    # output.
     return {
-        "movies_main": spark.read.option("escape", '"').csv(
-            str(base / "movies_main_clean.csv"), header=True, schema=CLEAN_MOVIES_SCHEMA
-        ),
-        "movie_extended": spark.read.option("escape", '"').csv(
-            str(base / "movie_extended_clean.csv"), header=True, schema=CLEAN_EXTENDED_SCHEMA
-        ),
-        "ratings": spark.read.option("escape", '"').csv(
-            str(base / "ratings_clean.csv"), header=True, schema=CLEAN_RATINGS_SCHEMA
-        ),
+        "movies_main": _read_parquet(spark, base / "movies_main", CLEAN_MOVIES_SCHEMA),
+        "movie_extended": _read_parquet(spark, base / "movie_extended", CLEAN_EXTENDED_SCHEMA),
+        "ratings": _read_parquet(spark, base / "ratings", CLEAN_RATINGS_SCHEMA),
     }
 
 

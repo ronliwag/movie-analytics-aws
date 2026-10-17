@@ -24,11 +24,11 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from scripts.config import ENRICHED_DIR, PROCESSED_DIR
 from scripts.pandas.data_processor import apply_transform, index_by_movie_id, load_json, standardize_date
 from scripts.pandas.models import Movie, Rating
 
-SOURCE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "enriched"
-PROCESSED_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "processed"
+SOURCE_DIR = ENRICHED_DIR  # reads enrichment's output, not data/raw/
 
 
 def load_movies(raw_dir: Path = SOURCE_DIR) -> pd.DataFrame:
@@ -180,10 +180,13 @@ def _listcols_to_str(df: pd.DataFrame) -> pd.DataFrame:
     # columns. Verified no individual genre/company/country/language value
     # in this dataset contains a literal comma, so joining this way doesn't
     # create any ambiguity when split back apart later.
+    # An empty list becomes None (NULL), not "": the CSV handoff turned ""
+    # into NULL by accident (Spark reads an empty CSV field as null), and
+    # Parquet would keep the "" as-is.
     df = df.copy()
     for col in df.columns:
         if df[col].apply(lambda v: isinstance(v, list)).any():
-            df[col] = df[col].apply(lambda v: ",".join(v) if isinstance(v, list) else v)
+            df[col] = df[col].apply(lambda v: (",".join(v) or None) if isinstance(v, list) else v)
     return df
 
 
@@ -208,15 +211,20 @@ def main():
 
     # Three outputs mirroring the raw sources (not merged) -- transform.py's
     # clean() loads these directly into clean.movies_main/movie_extended/ratings.
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    # One folder per table, because Spark and Athena read a table as a folder
+    # of files. Parquet stores column names and types, so clean() matches
+    # columns by name instead of by position.
     outputs = {
-        "movies_main_clean.csv": movies,
-        "movie_extended_clean.csv": _listcols_to_str(extended),
-        "ratings_clean.csv": ratings,
+        "movies_main": movies,
+        "movie_extended": _listcols_to_str(extended),
+        "ratings": ratings,
     }
-    for filename, df in outputs.items():
-        df.to_csv(PROCESSED_DIR / filename, index=False)
-        print(f"Wrote {len(df)} rows to {PROCESSED_DIR / filename}")
+    for table, df in outputs.items():
+        path = PROCESSED_DIR / table / "part-0.parquet"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Spark can't read nanosecond Parquet timestamps; store microseconds.
+        df.to_parquet(path, index=False, coerce_timestamps="us", allow_truncated_timestamps=True)
+        print(f"Wrote {len(df)} rows to {path}")
 
     # Demonstrate the Movie class over the cleaned data.
     movie_objs = [Movie.from_dict(row) for row in movies.to_dict("records")]
