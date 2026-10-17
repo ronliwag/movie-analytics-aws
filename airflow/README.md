@@ -40,7 +40,7 @@ The stock Airflow image has neither a JVM (PySpark needs one) nor this
 project's Python dependencies, and installing them isn't as simple as
 `pip install -r requirements.txt` into Airflow's own environment:
 
-- **pandas/pyspark/psycopg2-binary/python-dotenv/dbt-postgres** go into a
+- **pandas/pyarrow/pyspark/psycopg2-binary/python-dotenv/dbt-postgres** go into a
   separate `/opt/pipeline-venv`, not Airflow's own site-packages --
   `dbt-common` (a `dbt-postgres` dependency) requires `pathspec<1.1`, while
   Airflow 3.3.1's own constraints file pins `pathspec==1.1.1`. That's a
