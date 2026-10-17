@@ -1,6 +1,6 @@
 """Verifies transform.py's clean() correctly loads the three already-cleaned
-CSVs produced by scripts/pandas/clean_data.py (movies_main_clean.csv,
-movie_extended_clean.csv, ratings_clean.csv -- one per raw source). The
+Parquet tables produced by scripts/pandas/clean_data.py (processed/movies_main/,
+movie_extended/, ratings/ -- one folder per raw source). The
 actual cleaning rules (dedup, date parsing, 0->NULL, NaN handling, etc.) are
 implemented and owned by that pandas pipeline now, not here -- these tests
 check the load/handoff into Spark, not the cleaning rules themselves.
@@ -8,8 +8,7 @@ check the load/handoff into Spark, not the cleaning rules themselves.
 Run with: pytest scripts/pyspark/test_cleaned.py -v
 """
 
-import csv
-
+import pandas as pd
 import pytest
 
 from scripts.config import PROCESSED_DIR as REAL_PROCESSED_DIR
@@ -23,44 +22,50 @@ def spark():
     session.stop()
 
 
-def _write_csv(path, fieldnames, rows):
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+def _write_parquet(path, df):
+    # Same layout and options as clean_data.py's main().
+    path.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(path / "part-0.parquet", index=False, coerce_timestamps="us", allow_truncated_timestamps=True)
 
 
 @pytest.fixture
 def sample_processed_dir(tmp_path):
-    """Small fixture mirroring clean_data.py's real three-file output shape."""
-    _write_csv(
-        tmp_path / "movies_main_clean.csv",
-        ["id", "title", "release_date", "budget", "revenue"],
-        [
-            {"id": 1, "title": "Movie One", "release_date": "2020-01-01", "budget": 1000000, "revenue": 2000000},
-            {"id": 2, "title": "Movie Two", "release_date": "2019-05-05", "budget": "", "revenue": ""},
-        ],
+    """Small fixture mirroring clean_data.py's real three-table output shape."""
+    _write_parquet(
+        tmp_path / "movies_main",
+        pd.DataFrame({
+            "id": [1, 2],
+            "title": ["Movie One", "Movie Two"],
+            "release_date": pd.to_datetime(["2020-01-01", "2019-05-05"]),
+            "budget": [1000000.0, None],
+            "revenue": [2000000.0, None],
+        }),
     )
-    _write_csv(
-        tmp_path / "movie_extended_clean.csv",
-        [
-            "id", "genres", "production_companies",
-            "production_country_codes", "production_country_names",
-            "spoken_language_codes", "spoken_language_names",
-        ],
-        [
-            {"id": 1, "genres": "Drama; Crime", "production_companies": "Studio A",
-             "production_country_codes": "US", "production_country_names": "United States of America",
-             "spoken_language_codes": "en", "spoken_language_names": "English"},
-            {"id": 2, "genres": "Comedy", "production_companies": "Studio B",
-             "production_country_codes": "FR", "production_country_names": "France",
-             "spoken_language_codes": "fr", "spoken_language_names": "Français"},
-        ],
+    _write_parquet(
+        tmp_path / "movie_extended",
+        pd.DataFrame({
+            "id": [1, 2],
+            "genres": ["Drama,Crime", "Comedy"],
+            "production_companies": ["Studio A", "Studio B"],
+            "original_title": ["Movie One", "Film Deux"],
+            "original_language": ["en", "fr"],
+            "director": ["Director A", "Director B"],
+            "cast": ["Actor A,Actor B", None],
+            "production_country_codes": ["US", "FR"],
+            "production_country_names": ["United States of America", "France"],
+            "spoken_language_codes": ["en", "fr"],
+            "spoken_language_names": ["English", "Français"],
+        }),
     )
-    _write_csv(
-        tmp_path / "ratings_clean.csv",
-        ["movie_id", "avg_rating", "total_ratings", "std_dev", "last_rated"],
-        [{"movie_id": 1, "avg_rating": 4.2, "total_ratings": 10, "std_dev": 0.5, "last_rated": ""}],
+    _write_parquet(
+        tmp_path / "ratings",
+        pd.DataFrame({
+            "movie_id": [1],
+            "last_rated": pd.to_datetime([None], utc=True),
+            "avg_rating": [4.2],
+            "total_ratings": [10],
+            "std_dev": [0.5],
+        }),
     )
     return tmp_path
 
@@ -76,6 +81,24 @@ def test_clean_loads_all_three_tables(spark, sample_processed_dir):
 def test_clean_movies_main_has_expected_columns(spark, sample_processed_dir):
     df = clean(spark, processed_dir=sample_processed_dir)["movies_main"]
     assert {"id", "title", "release_date", "budget", "revenue"}.issubset(set(df.columns))
+
+
+def test_clean_matches_columns_by_name_not_position(spark, sample_processed_dir):
+    # The CSV handoff applied the schema by position, so a reordered column
+    # silently loaded into the wrong field. Parquet stores names, and clean()
+    # selects by them.
+    _write_parquet(
+        sample_processed_dir / "movies_main",
+        pd.DataFrame({
+            "revenue": [2000000.0],
+            "title": ["Movie One"],
+            "budget": [1000000.0],
+            "id": [1],
+            "release_date": pd.to_datetime(["2020-01-01"]),
+        }),
+    )
+    row = clean(spark, processed_dir=sample_processed_dir)["movies_main"].collect()[0]
+    assert (row["id"], row["title"], row["budget"], row["revenue"]) == (1, "Movie One", 1000000.0, 2000000.0)
 
 
 def test_clean_preserves_unique_ids(spark, sample_processed_dir):
@@ -104,8 +127,8 @@ def test_clean_defaults_to_the_real_processed_dir(spark, monkeypatch, sample_pro
 
 
 @pytest.mark.skipif(
-    not (REAL_PROCESSED_DIR / "movies_main_clean.csv").exists(),
-    reason="processed CSVs not generated yet -- run `python -m scripts.pandas.clean_data` first",
+    not (REAL_PROCESSED_DIR / "movies_main").exists(),
+    reason="processed Parquet not generated yet -- run `python -m scripts.pandas.clean_data` first",
 )
 def test_clean_against_the_real_pandas_output(spark):
     tables = clean(spark, processed_dir=REAL_PROCESSED_DIR)
