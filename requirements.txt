@@ -1,6 +1,6 @@
 pandas>=2.2
 pyarrow>=17.0  # pandas .to_parquet() for the pandas → Spark handoff
-pyspark>=3.5
+pyspark==4.2.0  # pinned: transform.py's hadoop-aws jar must match its bundled Hadoop (3.5.0)
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
 python-dotenv>=1.0

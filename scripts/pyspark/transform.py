@@ -7,6 +7,7 @@ job is unchanged from when it read data/raw/ directly; only SOURCE_DIR
 moved. Requires enrichment to have been run at least once already.
 """
 
+import argparse
 import os
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from scripts.config import AWS_REGION, DATA_DIR
+from scripts.config import AWS_REGION, DATA_DIR, LAKE_BUCKET
 
 load_dotenv()
 
@@ -34,6 +35,7 @@ SOURCE_DIR = DATA_DIR / "enriched"
 # NoSuchMethodError. Spark fetches it plus the AWS SDK v2 bundle it depends on
 # from Maven on first use and caches them in ~/.ivy2.
 HADOOP_AWS_PACKAGE = "org.apache.hadoop:hadoop-aws:3.5.0"
+LAKE_CLEAN_URI = f"s3a://{LAKE_BUCKET}/lake/clean"
 JARS_DIR = Path(__file__).resolve().parent / "jars"
 
 # `id` is DoubleType, not IntegerType, on purpose: scripts/enrichment/
@@ -228,7 +230,27 @@ def write_table(df: DataFrame, schema: str, table: str) -> None:
     )
 
 
-def main():
+def write_lake(df: DataFrame, table: str, base_uri: str = LAKE_CLEAN_URI) -> str:
+    # One file per table: these tables are a few MB, and Athena reads one
+    # small file faster than many tiny ones. overwrite deletes the folder's
+    # old files first (bucket versioning keeps the previous versions).
+    path = f"{base_uri}/{table}"
+    df.coalesce(1).write.mode("overwrite").parquet(path)
+    return path
+
+
+def run_lake() -> None:
+    spark = get_spark(lake=True)
+    try:
+        for table, df in clean(spark).items():
+            path = write_lake(df, table)
+            # Count what actually landed in S3, i.e. what Athena will see.
+            print(f"{path}: {spark.read.parquet(path).count()} rows")
+    finally:
+        spark.stop()
+
+
+def run_postgres() -> None:
     # Postgres schema is still named "raw" (meaning "pre-clean"), even
     # though its actual source is now data/enriched/, not data/raw/ -- see
     # SOURCE_DIR / the module docstring.
@@ -252,6 +274,22 @@ def main():
             print(f"clean.{table}: {df.count()} rows")
     finally:
         spark.stop()
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Load the clean tables into the lake or Postgres.")
+    parser.add_argument(
+        "--target",
+        choices=["lake", "postgres"],
+        default="lake",
+        help="lake: Parquet to s3a://<bucket>/lake/clean/ (default). "
+        "postgres: JDBC to raw.* and clean.*, which dbt reads until Phase 4.",
+    )
+    args = parser.parse_args(argv)
+    if args.target == "lake":
+        run_lake()
+    else:
+        run_postgres()
 
 
 if __name__ == "__main__":
