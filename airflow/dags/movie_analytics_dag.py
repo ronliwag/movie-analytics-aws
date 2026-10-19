@@ -75,7 +75,10 @@ with DAG(
 
     run_pyspark_transform = BashOperator(
         task_id="run_pyspark_transform",
-        bash_command=_preamble() + f'"{PYTHON_BIN}" scripts/pyspark/transform.py',
+        # -m, not a file path: run as a module from the repo root so
+        # `from scripts.config import ...` resolves. dbt still builds on
+        # Postgres until Phase 4 (dbt-athena), so this stays on that target.
+        bash_command=_preamble() + f'"{PYTHON_BIN}" -m scripts.pyspark.transform --target postgres',
     )
 
     dbt_run = BashOperator(

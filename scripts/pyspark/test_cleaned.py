@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from scripts.config import PROCESSED_DIR as REAL_PROCESSED_DIR
-from scripts.pyspark.transform import clean, get_spark
+from scripts.pyspark.transform import clean, get_spark, write_lake
 
 
 @pytest.fixture(scope="session")
@@ -140,3 +140,21 @@ def test_clean_against_the_real_pandas_output(spark):
     assert movies.select("id").distinct().count() == movies.count()
     assert extended.select("id").distinct().count() == extended.count()
     assert ratings.select("movie_id").distinct().count() == ratings.count()
+
+
+def test_write_lake_round_trips_with_athena_friendly_types(spark, sample_processed_dir, tmp_path):
+    # Same code path as the S3 run, but into a local folder, so no AWS needed.
+    lake = tmp_path / "lake_clean"
+    tables = clean(spark, processed_dir=sample_processed_dir)
+    for _ in range(2):  # a second run must replace the data, not append to it
+        for table, df in tables.items():
+            write_lake(df, table, base_uri=lake.as_uri())
+
+    movies = spark.read.parquet(str(lake / "movies_main"))
+    assert movies.count() == 2
+    # The Athena DDL declares these exact types; int vs bigint gives HIVE_BAD_DATA.
+    assert dict(movies.dtypes) == {
+        "id": "int", "title": "string", "release_date": "date", "budget": "double", "revenue": "double",
+    }
+    assert dict(spark.read.parquet(str(lake / "ratings")).dtypes)["last_rated"] == "timestamp"
+    assert len(list((lake / "movies_main").glob("part-*.parquet"))) == 1  # coalesce(1)

@@ -19,10 +19,26 @@
 
 ## Run
 
+From the repo root, as modules (`-m`), so `from scripts.config import ...`
+resolves:
+
 ```
-python scripts/pyspark/transform.py
+python -m scripts.pyspark.transform                    # --target lake (default)
+python -m scripts.pyspark.transform --target postgres
 python -m scripts.pyspark.analysis
 ```
+
+`transform.py` loads the clean tables from `data/processed/` and writes them
+to one of two targets:
+
+- **`--target lake`** (default): one Parquet file per table to
+  `s3a://<bucket>/lake/clean/<table>/`, overwriting the previous run. Athena
+  queries them through the Glue tables in `scripts/sql/athena/`. Needs AWS
+  credentials (`export AWS_PROFILE=movie-pipeline`). The first run downloads
+  the `hadoop-aws` jar and the AWS SDK bundle (~674 MB) from Maven into
+  `~/.ivy2*/`.
+- **`--target postgres`**: JDBC into `raw.*` and `clean.*`, which dbt reads
+  until Phase 4 (dbt-athena). The Airflow DAG uses this target.
 
 ## Grading focus (Python / Pandas / PySpark — 25% of the rubric)
 - PySpark batch processing — schema enforcement, writes to Postgres/Parquet (5%)

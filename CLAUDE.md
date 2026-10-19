@@ -32,4 +32,5 @@ from local PostgreSQL to **S3 + Glue Data Catalog + Athena**
 - AWS CLI profile: `movie-pipeline` (least-privilege; S3 `ron-movie-lake-*`,
   Athena workgroup `movie-analytics`, Glue databases `movie_*`).
 - `data/` is gitignored; data lives in S3.
-- Tests: `pytest scripts/pandas scripts/enrichment` (PySpark tests need Java).
+- Tests: `pytest scripts/pandas scripts/enrichment scripts/pyspark` (the
+  PySpark tests need Java 17, which is installed, but no AWS access).
