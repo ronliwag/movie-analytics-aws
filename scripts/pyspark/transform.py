@@ -24,11 +24,16 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from scripts.config import DATA_DIR
+from scripts.config import AWS_REGION, DATA_DIR
 
 load_dotenv()
 
 SOURCE_DIR = DATA_DIR / "enriched"
+# Must match the Hadoop version bundled with the pinned PySpark exactly
+# (pyspark 4.2.0 -> Hadoop 3.5.0), or s3a fails with ClassNotFoundException /
+# NoSuchMethodError. Spark fetches it plus the AWS SDK v2 bundle it depends on
+# from Maven on first use and caches them in ~/.ivy2.
+HADOOP_AWS_PACKAGE = "org.apache.hadoop:hadoop-aws:3.5.0"
 JARS_DIR = Path(__file__).resolve().parent / "jars"
 
 # `id` is DoubleType, not IntegerType, on purpose: scripts/enrichment/
@@ -111,12 +116,27 @@ CLEAN_RATINGS_SCHEMA = StructType(
 )
 
 
-def get_spark() -> SparkSession:
+def get_spark(lake: bool = False) -> SparkSession:
     builder = SparkSession.builder.appName("movie-analytics-capstone").master("local[*]")
 
     jars = sorted(JARS_DIR.glob("postgresql-*.jar")) if JARS_DIR.exists() else []
     if jars:
         builder = builder.config("spark.jars", ",".join(str(j) for j in jars))
+
+    # Only the lake target needs s3a, so tests and --target postgres don't
+    # download anything from Maven or need AWS credentials.
+    if lake:
+        builder = (
+            builder.config("spark.jars.packages", HADOOP_AWS_PACKAGE)
+            .config("spark.hadoop.fs.s3a.endpoint.region", AWS_REGION)
+            # s3a's built-in credential list doesn't read ~/.aws profiles, so
+            # AWS_PROFILE would be ignored. The SDK's default chain reads env
+            # vars, then the AWS_PROFILE profile, then an instance/container role.
+            .config(
+                "spark.hadoop.fs.s3a.aws.credentials.provider",
+                "software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider",
+            )
+        )
 
     return builder.getOrCreate()
 

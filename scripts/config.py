@@ -22,3 +22,8 @@ RAW_DIR = DATA_DIR / "raw"
 ENRICHED_DIR = DATA_DIR / "enriched"
 PROCESSED_DIR = DATA_DIR / "processed"
 EXTERNAL_DIR = DATA_DIR / "external"
+
+# The S3 data lake. BUCKET is already exported in ~/.bashrc; LAKE_BUCKET wins
+# if both are set. Neither is secret, so a default is fine.
+LAKE_BUCKET = os.environ.get("LAKE_BUCKET") or os.environ.get("BUCKET") or "ron-movie-lake-capstone"
+AWS_REGION = os.environ.get("AWS_REGION") or "ap-southeast-1"
